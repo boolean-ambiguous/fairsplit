@@ -15,24 +15,24 @@
       </select>
     </label>
     <label>Split
-      <select name="split_mode" onchange="this.closest('form').querySelectorAll('.share-input').forEach(el => el.style.display = this.value === 'exact' ? '' : 'none')">
+      <select name="split_mode" onchange="this.closest('form').querySelectorAll('.share-input').forEach(el => el.classList.toggle('is-visible', this.value === 'exact'))">
         <option value="even">Evenly</option>
         <option value="exact">Exact amounts</option>
       </select>
     </label>
-    <fieldset style="border:none;padding:0;margin:0">
-      <legend class="muted" style="font-size:0.85rem">Split among</legend>
+    <fieldset class="fieldset-plain">
+      <legend class="legend">Split among</legend>
       {% for member in members %}
-      <label style="flex-direction:row;align-items:center">
+      <label class="field-row">
         <input type="checkbox" name="participants" value="{{ member.id }}" checked>
         {{ member.name }}
-        <input class="share-input" style="display:none;width:5.5rem" type="text" inputmode="decimal" name="share_{{ member.id }}" placeholder="0.00">
+        <input class="share-input" type="text" inputmode="decimal" name="share_{{ member.id }}" placeholder="0.00">
       </label>
       {% endfor %}
     </fieldset>
-    <button type="submit">Add expense</button>
+    <button type="submit" class="btn">Add expense</button>
   </form>
-  {% if expense_error %}<p class="negative">{{ expense_error }}</p>{% endif %}
+  {% if expense_error %}<p class="error">{{ expense_error }}</p>{% endif %}
   {% else %}
   <p class="muted">Add members before recording expenses.</p>
   {% endif %}

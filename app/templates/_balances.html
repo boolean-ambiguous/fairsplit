@@ -5,11 +5,11 @@
     <li>
       {{ member.name }}:
       {% if bal > 0 %}
-      <span class="amount positive">is owed {{ bal | money }}</span>
+      <span class="amount badge-positive">is owed {{ bal | money }}</span>
       {% elif bal < 0 %}
-      <span class="amount negative">owes {{ (-bal) | money }}</span>
+      <span class="amount badge-negative">owes {{ (-bal) | money }}</span>
       {% else %}
-      <span class="amount muted">settled up</span>
+      <span class="amount badge-muted">settled up</span>
       {% endif %}
     </li>
     {% else %}

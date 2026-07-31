@@ -3,9 +3,9 @@
     <label>Add member
       <input type="text" name="name" placeholder="Name" required>
     </label>
-    <button type="submit">Add</button>
+    <button type="submit" class="btn">Add</button>
   </form>
-  {% if member_error %}<p class="negative">{{ member_error }}</p>{% endif %}
+  {% if member_error %}<p class="error">{{ member_error }}</p>{% endif %}
   <ul class="plain">
     {% for member in members %}
     <li>{{ member.name }}</li>
