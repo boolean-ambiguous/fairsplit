@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import Expense, Group, Member
+from app.services.balances import compute_balances
 from app.services.expenses import ExpenseError, record_expense
 from app.services.money import MoneyError, parse_amount
 
@@ -50,6 +51,7 @@ def _detail_context(session: Session, group: Group) -> dict:
         "members": members,
         "expenses": expenses,
         "member_names": member_names,
+        "balances": compute_balances(session, group.id),
     }
 
 
@@ -139,6 +141,7 @@ def add_expense(
         error = str(exc)
     context = _detail_context(session, group)
     context["expense_error"] = error
+    context["oob"] = True
     return _templates(request).TemplateResponse(
         request, "_expenses.html", context, status_code=422 if error else 200
     )
