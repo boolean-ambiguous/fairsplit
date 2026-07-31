@@ -46,3 +46,25 @@ export interface ExpenseCreate {
   split_mode: SplitMode
   exact_shares?: Record<string, string>
 }
+
+export type DashboardRange = '1d' | '5d' | '1mo' | '12mo'
+
+export interface DashboardGroup {
+  id: string
+  name: string
+  last_expense_at: string | null
+  balance_cents: number
+}
+
+export interface FlowPoint {
+  date: string
+  net_cents: number
+  // MUI x-charts' `dataset` prop requires an index signature on its items.
+  [key: string]: unknown
+}
+
+export interface Dashboard {
+  nickname: string
+  groups: DashboardGroup[]
+  flow: FlowPoint[]
+}

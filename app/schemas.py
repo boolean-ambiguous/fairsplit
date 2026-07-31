@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -60,3 +60,21 @@ class ExpenseCreate(BaseModel):
     participant_ids: list[uuid.UUID]
     split_mode: str = "even"
     exact_shares: dict[uuid.UUID, str] | None = None
+
+
+class DashboardGroupOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    last_expense_at: datetime | None
+    balance_cents: int
+
+
+class FlowPointOut(BaseModel):
+    date: date
+    net_cents: int
+
+
+class DashboardOut(BaseModel):
+    nickname: str
+    groups: list[DashboardGroupOut]
+    flow: list[FlowPointOut]

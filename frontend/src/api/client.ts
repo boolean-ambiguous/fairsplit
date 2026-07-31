@@ -1,4 +1,10 @@
-import type { ExpenseCreate, Group, GroupDetail } from './types'
+import type {
+  Dashboard,
+  DashboardRange,
+  ExpenseCreate,
+  Group,
+  GroupDetail,
+} from './types'
 
 export class ApiError extends Error {
   status: number
@@ -38,4 +44,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  getDashboard: (nickname: string, range: DashboardRange) =>
+    request<Dashboard>(
+      `/dashboard?nickname=${encodeURIComponent(nickname)}&range=${range}`,
+    ),
 }
