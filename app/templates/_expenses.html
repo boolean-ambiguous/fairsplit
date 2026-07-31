@@ -1,0 +1,49 @@
+<div class="card">
+  {% if members %}
+  <form class="inline" hx-post="/groups/{{ group.id }}/expenses" hx-target="#expenses" hx-swap="innerHTML" hx-on::after-request="if(event.detail.successful) this.reset()">
+    <label>Description
+      <input type="text" name="description" placeholder="e.g. Dinner" required>
+    </label>
+    <label>Amount
+      <input type="text" name="amount" inputmode="decimal" placeholder="0.00" required>
+    </label>
+    <label>Paid by
+      <select name="payer_id">
+        {% for member in members %}
+        <option value="{{ member.id }}">{{ member.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <fieldset style="border:none;padding:0;margin:0">
+      <legend class="muted" style="font-size:0.85rem">Split among</legend>
+      {% for member in members %}
+      <label style="flex-direction:row;align-items:center">
+        <input type="checkbox" name="participants" value="{{ member.id }}" checked>
+        {{ member.name }}
+      </label>
+      {% endfor %}
+    </fieldset>
+    <button type="submit">Add expense</button>
+  </form>
+  {% if expense_error %}<p class="negative">{{ expense_error }}</p>{% endif %}
+  {% else %}
+  <p class="muted">Add members before recording expenses.</p>
+  {% endif %}
+
+  {% if expenses %}
+  <table>
+    <thead>
+      <tr><th>Description</th><th>Paid by</th><th class="amount">Amount</th></tr>
+    </thead>
+    <tbody>
+      {% for expense in expenses %}
+      <tr>
+        <td>{{ expense.description }}</td>
+        <td>{{ member_names[expense.payer_id] }}</td>
+        <td class="amount">{{ expense.amount_cents | money }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>

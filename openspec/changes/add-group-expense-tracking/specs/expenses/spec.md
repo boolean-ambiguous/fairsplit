@@ -54,7 +54,7 @@ The system SHALL split each expense evenly among its participants in integer cen
 #### Scenario: Remainder distribution
 
 - **WHEN** 100.00 is split among 3 participants
-- **THEN** the two participants with the lowest member ids owe 33.34 and the third owes 33.33, summing to 100.00
+- **THEN** the participant with the lowest member id owes 33.34 and the other two owe 33.33 each, summing to 100.00
 
 #### Scenario: Single participant
 

@@ -1,0 +1,5 @@
+{% for group in groups %}
+<li class="card"><a href="/groups/{{ group.id }}">{{ group.name }}</a></li>
+{% else %}
+<li class="muted">No groups yet — create one above.</li>
+{% endfor %}
