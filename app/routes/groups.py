@@ -6,6 +6,7 @@ from app.database import get_session
 from app.models import Expense, Group, Member
 from app.services.balances import compute_balances
 from app.services.expenses import ExpenseError, record_expense
+from app.services.settlements import suggest_settlements
 from app.services.money import MoneyError, parse_amount
 
 router = APIRouter(prefix="/groups")
@@ -46,12 +47,14 @@ def _detail_context(session: Session, group: Group) -> dict:
     members = group_members(session, group.id)
     expenses = group_expenses(session, group.id)
     member_names = {m.id: m.name for m in members}
+    balances = compute_balances(session, group.id)
     return {
         "group": group,
         "members": members,
         "expenses": expenses,
         "member_names": member_names,
-        "balances": compute_balances(session, group.id),
+        "balances": balances,
+        "settlements": suggest_settlements(balances),
     }
 
 

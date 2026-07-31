@@ -1,0 +1,15 @@
+<div class="card" id="settlements" {% if oob %}hx-swap-oob="true"{% endif %}>
+  {% if settlements %}
+  <ul class="plain">
+    {% for payment in settlements %}
+    <li>
+      <strong>{{ member_names[payment.from_member] }}</strong> pays
+      <strong>{{ member_names[payment.to_member] }}</strong>
+      <span class="amount">{{ payment.amount_cents | money }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No payments needed — everyone is settled up.</p>
+  {% endif %}
+</div>
