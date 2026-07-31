@@ -14,3 +14,10 @@
     {% endfor %}
   </ul>
 </div>
+{% if oob %}
+<div id="expenses" hx-swap-oob="true">
+  {% with oob = False %}{% include "_expenses.html" %}{% endwith %}
+</div>
+{% include "_balances.html" %}
+{% include "_settlements.html" %}
+{% endif %}

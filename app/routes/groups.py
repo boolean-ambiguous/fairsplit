@@ -113,6 +113,7 @@ def add_member(
         session.commit()
     context = _detail_context(session, group)
     context["member_error"] = error
+    context["oob"] = True
     return _templates(request).TemplateResponse(
         request, "_members.html", context, status_code=422 if error else 200
     )
