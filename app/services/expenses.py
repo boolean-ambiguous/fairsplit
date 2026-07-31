@@ -22,6 +22,26 @@ def split_evenly(amount_cents: int, participant_ids: list[int]) -> dict[int, int
     }
 
 
+def validate_exact_shares(
+    amount_cents: int, participant_ids: list[int], exact_shares: dict[int, int]
+) -> dict[int, int]:
+    if set(exact_shares) != set(participant_ids):
+        raise ExpenseError("Exact shares must cover exactly the participants")
+    if any(share < 0 for share in exact_shares.values()):
+        raise ExpenseError("Shares cannot be negative")
+    total = sum(exact_shares.values())
+    if total != amount_cents:
+        from app.services.money import format_cents
+
+        diff = amount_cents - total
+        direction = "missing" if diff > 0 else "too much"
+        raise ExpenseError(
+            f"Shares total {format_cents(total)} but the expense is "
+            f"{format_cents(amount_cents)} ({format_cents(abs(diff))} {direction})"
+        )
+    return dict(exact_shares)
+
+
 def record_expense(
     session: Session,
     *,
@@ -30,11 +50,14 @@ def record_expense(
     amount_cents: int,
     payer_id: int,
     participant_ids: list[int],
+    exact_shares: dict[int, int] | None = None,
 ) -> Expense:
     if not description.strip():
         raise ExpenseError("Description is required")
     if amount_cents <= 0:
         raise ExpenseError("Amount must be positive")
+    if not participant_ids:
+        raise ExpenseError("At least one participant is required")
 
     member_ids = set(
         session.exec(select(Member.id).where(Member.group_id == group_id)).all()
@@ -45,7 +68,10 @@ def record_expense(
     if invalid:
         raise ExpenseError("All participants must be members of the group")
 
-    shares = split_evenly(amount_cents, participant_ids)
+    if exact_shares is not None:
+        shares = validate_exact_shares(amount_cents, participant_ids, exact_shares)
+    else:
+        shares = split_evenly(amount_cents, participant_ids)
 
     expense = Expense(
         group_id=group_id,

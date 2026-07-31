@@ -7,7 +7,7 @@ from app.models import Expense, Group, Member
 from app.services.balances import compute_balances
 from app.services.expenses import ExpenseError, record_expense
 from app.services.settlements import suggest_settlements
-from app.services.money import MoneyError, parse_amount
+from app.services.money import MoneyError, parse_amount, parse_share
 
 router = APIRouter(prefix="/groups")
 
@@ -119,19 +119,27 @@ def add_member(
 
 
 @router.post("/{group_id}/expenses", response_class=HTMLResponse)
-def add_expense(
+async def add_expense(
     request: Request,
     group_id: int,
     description: str = Form(""),
     amount: str = Form(""),
     payer_id: int = Form(...),
     participants: list[int] = Form(default=[]),
+    split_mode: str = Form("even"),
     session: Session = Depends(get_session),
 ):
     group = get_group_or_404(session, group_id)
     error = None
     try:
         amount_cents = parse_amount(amount)
+        exact_shares = None
+        if split_mode == "exact":
+            form = await request.form()
+            exact_shares = {}
+            for member_id in participants:
+                raw = str(form.get(f"share_{member_id}", "")).strip()
+                exact_shares[member_id] = parse_share(raw)
         record_expense(
             session,
             group_id=group_id,
@@ -139,6 +147,7 @@ def add_expense(
             amount_cents=amount_cents,
             payer_id=payer_id,
             participant_ids=participants,
+            exact_shares=exact_shares,
         )
     except (MoneyError, ExpenseError) as exc:
         error = str(exc)
