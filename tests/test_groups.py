@@ -1,3 +1,9 @@
+def test_root_redirects_to_groups(client):
+    resp = client.get("/", follow_redirects=False)
+    assert resp.status_code in (302, 307)
+    assert resp.headers["location"] == "/groups"
+
+
 def test_create_group(client):
     resp = client.post("/groups", data={"name": "Ski trip"})
     assert resp.status_code == 200

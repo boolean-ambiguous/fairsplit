@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -31,8 +32,8 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/")
-    def index(request: Request):
-        return templates.TemplateResponse(request, "index.html")
+    def index():
+        return RedirectResponse(url="/groups")
 
     return app
 
