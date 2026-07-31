@@ -45,7 +45,7 @@ The system SHALL store all monetary amounts as integer cents. Amounts entered as
 
 The system SHALL support two ways of splitting an expense among its participants, chosen per expense, with shares always stored in integer cents that sum exactly to the expense amount.
 
-**Even mode (default):** the system SHALL split the amount evenly among participants. When the amount is not evenly divisible, the remainder cents SHALL be assigned one each to participants in ascending member-id order.
+**Even mode (default):** the system SHALL split the amount evenly among participants. When the amount is not evenly divisible, the remainder cents SHALL be assigned one each to participants in ascending order of when they joined the group (earliest-joined participants first).
 
 **Exact mode:** the user provides each participant's share in cents. The system SHALL reject the expense unless the provided shares sum exactly to the expense amount. Individual shares MAY be zero, but every share MUST be non-negative.
 
@@ -56,8 +56,8 @@ The system SHALL support two ways of splitting an expense among its participants
 
 #### Scenario: Remainder distribution
 
-- **WHEN** 100.00 is split evenly among 3 participants
-- **THEN** the participant with the lowest member id owes 33.34 and the other two owe 33.33 each, summing to 100.00
+- **WHEN** 100.00 is split evenly among 3 participants who joined the group in a known order
+- **THEN** the participant who joined earliest owes 33.34 and the other two owe 33.33 each, summing to 100.00
 
 #### Scenario: Single participant
 

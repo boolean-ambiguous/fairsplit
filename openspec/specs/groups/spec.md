@@ -5,7 +5,7 @@ Organizing people into named groups so shared expenses can be tracked against a 
 ## Requirements
 ### Requirement: Group creation
 
-The system SHALL allow creating a group with a non-empty name and SHALL assign it a unique identifier.
+The system SHALL allow creating a group with a non-empty name and SHALL assign it a unique, randomly-generated identifier that is not derived from creation order or any other sequential counter, so that identifiers cannot be guessed by enumeration.
 
 #### Scenario: Create a group
 
@@ -33,7 +33,7 @@ The system SHALL allow adding members to a group by name. Member names MUST be u
 
 ### Requirement: Group visibility
 
-The system SHALL provide a list of all groups and a detail view per group showing its member roster.
+The system SHALL provide a list of all groups and a detail view per group showing its member roster. A group identifier that is not in the expected identifier format SHALL be rejected before any lookup is attempted; a well-formed identifier that does not match any group SHALL be rejected the same way a lookup failure would be, so malformed and merely-unknown identifiers reveal no information beyond "not accessible."
 
 #### Scenario: View a group
 
@@ -42,6 +42,11 @@ The system SHALL provide a list of all groups and a detail view per group showin
 
 #### Scenario: Unknown group
 
-- **WHEN** a user requests a group identifier that does not exist
+- **WHEN** a user requests a group identifier that is well-formed but does not exist
 - **THEN** the system responds with a not-found error
+
+#### Scenario: Malformed group identifier
+
+- **WHEN** a user requests a group identifier that is not in the expected identifier format
+- **THEN** the system rejects the request before attempting any lookup
 
