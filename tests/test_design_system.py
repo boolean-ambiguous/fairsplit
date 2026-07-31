@@ -125,15 +125,18 @@ def test_group_pages_have_no_inline_styles(client, group_with_members):
     _assert_no_inline_styles(client.get(f"/groups/{group_id}").text, "group detail")
 
 
-def test_expense_form_partial_has_no_inline_styles(client, group_with_members):
+def test_expense_form_partial_has_no_inline_styles(
+    client, group_with_members, member_ids
+):
     group_id = group_with_members(["Ana", "Ben"])
+    ana, ben = member_ids(group_id, ["Ana", "Ben"])
     resp = client.post(
         f"/groups/{group_id}/expenses",
         data={
             "description": "Lunch",
             "amount": "10.00",
-            "payer_id": "1",
-            "participants": ["1", "2"],
+            "payer_id": str(ana),
+            "participants": [str(ana), str(ben)],
         },
     )
     _assert_no_inline_styles(resp.text, "expense partial")

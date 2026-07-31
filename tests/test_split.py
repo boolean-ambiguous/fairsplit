@@ -7,13 +7,17 @@ def test_even_division():
     assert split_evenly(6000, [1, 2, 3]) == {1: 2000, 2: 2000, 3: 2000}
 
 
-def test_remainder_goes_to_lowest_ids():
+def test_remainder_goes_to_first_participants_in_order():
     assert split_evenly(10000, [1, 2, 3]) == {1: 3334, 2: 3333, 3: 3333}
     assert split_evenly(10001, [1, 2, 3]) == {1: 3334, 2: 3334, 3: 3333}
 
 
-def test_remainder_is_order_independent():
-    assert split_evenly(10000, [3, 1, 2]) == split_evenly(10000, [1, 2, 3])
+def test_remainder_follows_given_order_not_value():
+    # split_evenly no longer sorts internally (ids carry no inherent order
+    # under UUIDs) — the remainder goes to the first entries of whatever
+    # order the caller supplies, so reordering the input changes the result.
+    assert split_evenly(10000, [3, 1, 2]) == {3: 3334, 1: 3333, 2: 3333}
+    assert split_evenly(10000, [1, 2, 3]) == {1: 3334, 2: 3333, 3: 3333}
 
 
 def test_single_participant():

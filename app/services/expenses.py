@@ -1,3 +1,5 @@
+import uuid
+
 from sqlmodel import Session, select
 
 from app.models import Expense, ExpenseShare, Member
@@ -7,24 +9,29 @@ class ExpenseError(ValueError):
     pass
 
 
-def split_evenly(amount_cents: int, participant_ids: list[int]) -> dict[int, int]:
+def split_evenly(
+    amount_cents: int, participant_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, int]:
     """Split amount into integer-cent shares that sum exactly to the total.
 
-    Remainder cents go one each to participants in ascending id order.
+    Remainder cents go one each to the first participants in the given
+    order. The caller is responsible for supplying a meaningful order
+    (e.g. group join order) — ids carry no inherent ordering of their own.
     """
     if not participant_ids:
         raise ExpenseError("At least one participant is required")
-    ordered = sorted(participant_ids)
-    base, remainder = divmod(amount_cents, len(ordered))
+    base, remainder = divmod(amount_cents, len(participant_ids))
     return {
         member_id: base + (1 if i < remainder else 0)
-        for i, member_id in enumerate(ordered)
+        for i, member_id in enumerate(participant_ids)
     }
 
 
 def validate_exact_shares(
-    amount_cents: int, participant_ids: list[int], exact_shares: dict[int, int]
-) -> dict[int, int]:
+    amount_cents: int,
+    participant_ids: list[uuid.UUID],
+    exact_shares: dict[uuid.UUID, int],
+) -> dict[uuid.UUID, int]:
     if set(exact_shares) != set(participant_ids):
         raise ExpenseError("Exact shares must cover exactly the participants")
     if any(share < 0 for share in exact_shares.values()):
@@ -45,12 +52,12 @@ def validate_exact_shares(
 def record_expense(
     session: Session,
     *,
-    group_id: int,
+    group_id: uuid.UUID,
     description: str,
     amount_cents: int,
-    payer_id: int,
-    participant_ids: list[int],
-    exact_shares: dict[int, int] | None = None,
+    payer_id: uuid.UUID,
+    participant_ids: list[uuid.UUID],
+    exact_shares: dict[uuid.UUID, int] | None = None,
 ) -> Expense:
     if not description.strip():
         raise ExpenseError("Description is required")
@@ -59,19 +66,28 @@ def record_expense(
     if not participant_ids:
         raise ExpenseError("At least one participant is required")
 
-    member_ids = set(
-        session.exec(select(Member.id).where(Member.group_id == group_id)).all()
-    )
+    members_by_join_order = session.exec(
+        select(Member.id)
+        .where(Member.group_id == group_id)
+        .order_by(Member.created_at)
+    ).all()
+    member_ids = set(members_by_join_order)
     if payer_id not in member_ids:
         raise ExpenseError("Payer must be a member of the group")
-    invalid = set(participant_ids) - member_ids
+    participant_set = set(participant_ids)
+    invalid = participant_set - member_ids
     if invalid:
         raise ExpenseError("All participants must be members of the group")
 
     if exact_shares is not None:
         shares = validate_exact_shares(amount_cents, participant_ids, exact_shares)
     else:
-        shares = split_evenly(amount_cents, participant_ids)
+        ordered_participants = [
+            member_id
+            for member_id in members_by_join_order
+            if member_id in participant_set
+        ]
+        shares = split_evenly(amount_cents, ordered_participants)
 
     expense = Expense(
         group_id=group_id,

@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
@@ -12,27 +14,29 @@ from app.services.money import MoneyError, parse_amount, parse_share
 router = APIRouter(prefix="/groups")
 
 
-def get_group_or_404(session: Session, group_id: int) -> Group:
+def get_group_or_404(session: Session, group_id: uuid.UUID) -> Group:
     group = session.get(Group, group_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Group not found")
     return group
 
 
-def group_members(session: Session, group_id: int) -> list[Member]:
+def group_members(session: Session, group_id: uuid.UUID) -> list[Member]:
     return list(
         session.exec(
-            select(Member).where(Member.group_id == group_id).order_by(Member.id)
+            select(Member)
+            .where(Member.group_id == group_id)
+            .order_by(Member.created_at)
         ).all()
     )
 
 
-def group_expenses(session: Session, group_id: int) -> list[Expense]:
+def group_expenses(session: Session, group_id: uuid.UUID) -> list[Expense]:
     return list(
         session.exec(
             select(Expense)
             .where(Expense.group_id == group_id)
-            .order_by(Expense.id.desc())
+            .order_by(Expense.created_at.desc())
         ).all()
     )
 
@@ -60,7 +64,7 @@ def _detail_context(session: Session, group: Group) -> dict:
 
 @router.get("", response_class=HTMLResponse)
 def list_groups(request: Request, session: Session = Depends(get_session)):
-    groups = session.exec(select(Group).order_by(Group.id)).all()
+    groups = session.exec(select(Group).order_by(Group.created_at)).all()
     return _templates(request).TemplateResponse(
         request, "group_list.html", {"groups": groups}
     )
@@ -76,7 +80,7 @@ def create_group(
     group = Group(name=name)
     session.add(group)
     session.commit()
-    groups = session.exec(select(Group).order_by(Group.id)).all()
+    groups = session.exec(select(Group).order_by(Group.created_at)).all()
     return _templates(request).TemplateResponse(
         request, "_group_list_items.html", {"groups": groups}
     )
@@ -84,7 +88,7 @@ def create_group(
 
 @router.get("/{group_id}", response_class=HTMLResponse)
 def group_detail(
-    request: Request, group_id: int, session: Session = Depends(get_session)
+    request: Request, group_id: uuid.UUID, session: Session = Depends(get_session)
 ):
     group = get_group_or_404(session, group_id)
     return _templates(request).TemplateResponse(
@@ -95,7 +99,7 @@ def group_detail(
 @router.post("/{group_id}/members", response_class=HTMLResponse)
 def add_member(
     request: Request,
-    group_id: int,
+    group_id: uuid.UUID,
     name: str = Form(""),
     session: Session = Depends(get_session),
 ):
@@ -122,11 +126,11 @@ def add_member(
 @router.post("/{group_id}/expenses", response_class=HTMLResponse)
 async def add_expense(
     request: Request,
-    group_id: int,
+    group_id: uuid.UUID,
     description: str = Form(""),
     amount: str = Form(""),
-    payer_id: int = Form(...),
-    participants: list[int] = Form(default=[]),
+    payer_id: uuid.UUID = Form(...),
+    participants: list[uuid.UUID] = Form(default=[]),
     split_mode: str = Form("even"),
     session: Session = Depends(get_session),
 ):

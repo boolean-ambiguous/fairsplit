@@ -1,3 +1,6 @@
+import uuid
+
+
 def test_root_redirects_to_groups(client):
     resp = client.get("/", follow_redirects=False)
     assert resp.status_code in (302, 307)
@@ -29,4 +32,9 @@ def test_duplicate_member_rejected(client, group_with_members):
 
 
 def test_unknown_group_404(client):
-    assert client.get("/groups/999").status_code == 404
+    assert client.get(f"/groups/{uuid.uuid4()}").status_code == 404
+
+
+def test_malformed_group_id_rejected_before_lookup(client):
+    resp = client.get("/groups/not-a-uuid")
+    assert resp.status_code == 422

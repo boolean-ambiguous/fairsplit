@@ -56,15 +56,16 @@ def test_plan_zeroes_balances_and_respects_bound():
         assert all(v == 0 for v in applied.values())
 
 
-def test_plan_shown_on_group_page(client, group_with_members):
+def test_plan_shown_on_group_page(client, group_with_members, member_ids):
     group_id = group_with_members(["Ana", "Ben"])
+    ana, ben = member_ids(group_id, ["Ana", "Ben"])
     client.post(
         f"/groups/{group_id}/expenses",
         data={
             "description": "Lunch",
             "amount": "10.00",
-            "payer_id": "1",
-            "participants": ["1", "2"],
+            "payer_id": str(ana),
+            "participants": [str(ana), str(ben)],
         },
     )
     page = client.get(f"/groups/{group_id}").text

@@ -1,14 +1,16 @@
+import uuid
+
 from sqlmodel import Session, func, select
 
 from app.models import Expense, ExpenseShare, Member
 
 
-def compute_balances(session: Session, group_id: int) -> dict[int, int]:
+def compute_balances(session: Session, group_id: uuid.UUID) -> dict[uuid.UUID, int]:
     """Net cents per member: positive = group owes them, negative = they owe."""
     member_ids = session.exec(
         select(Member.id).where(Member.group_id == group_id)
     ).all()
-    balances: dict[int, int] = {mid: 0 for mid in member_ids}
+    balances: dict[uuid.UUID, int] = {mid: 0 for mid in member_ids}
 
     paid = session.exec(
         select(Expense.payer_id, func.sum(Expense.amount_cents))
