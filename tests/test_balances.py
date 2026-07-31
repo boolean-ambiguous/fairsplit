@@ -1,4 +1,5 @@
 import random
+import uuid
 
 from sqlmodel import Session
 
@@ -7,12 +8,12 @@ from app.services.balances import compute_balances
 
 def add_expense(client, group_id, description, amount, payer_id, participants):
     return client.post(
-        f"/groups/{group_id}/expenses",
-        data={
+        f"/api/groups/{group_id}/expenses",
+        json={
             "description": description,
             "amount": amount,
             "payer_id": str(payer_id),
-            "participants": [str(p) for p in participants],
+            "participant_ids": [str(p) for p in participants],
         },
     )
 
@@ -65,26 +66,35 @@ def test_balances_sum_to_zero_property(client, engine, group_with_members, membe
     assert sum(balances(engine, group_id).values()) == 0
 
 
-def test_balances_shown_on_group_page(client, group_with_members, member_ids):
+def test_balances_shown_in_group_detail(client, group_with_members, member_ids):
     group_id = group_with_members(["Ana", "Ben"])
     ana, ben = member_ids(group_id, ["Ana", "Ben"])
     add_expense(client, group_id, "Lunch", "10.00", ana, [ana, ben])
-    page = client.get(f"/groups/{group_id}").text
-    assert "is owed 5.00" in page
-    assert "owes 5.00" in page
+    detail = client.get(f"/api/groups/{group_id}").json()
+    by_member = {
+        uuid.UUID(b["member_id"]): b["balance_cents"] for b in detail["balances"]
+    }
+    assert by_member[ana] == 500
+    assert by_member[ben] == -500
 
 
-def test_settled_member_shown(client, group_with_members):
+def test_settled_member_has_zero_balance(client, group_with_members, member_ids):
     group_id = group_with_members(["Ana"])
-    page = client.get(f"/groups/{group_id}").text
-    assert "settled up" in page
+    (ana,) = member_ids(group_id, ["Ana"])
+    detail = client.get(f"/api/groups/{group_id}").json()
+    by_member = {
+        uuid.UUID(b["member_id"]): b["balance_cents"] for b in detail["balances"]
+    }
+    assert by_member[ana] == 0
 
 
-def test_expense_response_includes_balance_update(
+def test_expense_response_includes_updated_balances(
     client, group_with_members, member_ids
 ):
     group_id = group_with_members(["Ana", "Ben"])
     ana, ben = member_ids(group_id, ["Ana", "Ben"])
     resp = add_expense(client, group_id, "Lunch", "10.00", ana, [ana, ben])
-    assert 'hx-swap-oob="true"' in resp.text
-    assert "is owed 5.00" in resp.text
+    by_member = {
+        uuid.UUID(b["member_id"]): b["balance_cents"] for b in resp.json()["balances"]
+    }
+    assert by_member[ana] == 500

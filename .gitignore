@@ -4,3 +4,6 @@ __pycache__/
 fairsplit.db
 .pytest_cache/
 *.egg-info/
+frontend/node_modules/
+frontend/dist/
+frontend/node_modules/.tmp/

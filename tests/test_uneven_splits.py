@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from sqlmodel import Session
 
@@ -6,16 +8,15 @@ from app.services.expenses import ExpenseError, validate_exact_shares
 
 
 def post_exact(client, group_id, amount, payer_id, shares):
-    data = {
+    body = {
         "description": "Dinner",
         "amount": amount,
         "payer_id": str(payer_id),
         "split_mode": "exact",
-        "participants": [str(m) for m in shares],
+        "participant_ids": [str(m) for m in shares],
+        "exact_shares": {str(k): v for k, v in shares.items()},
     }
-    for member_id, share in shares.items():
-        data[f"share_{member_id}"] = share
-    return client.post(f"/groups/{group_id}/expenses", data=data)
+    return client.post(f"/api/groups/{group_id}/expenses", json=body)
 
 
 def test_exact_split_accepted_with_zero_share(
@@ -55,9 +56,10 @@ def test_sum_mismatch_names_difference(client, group_with_members, member_ids):
         client, group_id, "60.00", ana, {ana: "35.00", ben: "24.99"}
     )
     assert resp.status_code == 422
-    assert "59.99" in resp.text
-    assert "0.01" in resp.text
-    assert "missing" in resp.text
+    detail = resp.json()["detail"]
+    assert "59.99" in detail
+    assert "0.01" in detail
+    assert "missing" in detail
 
 
 def test_sum_overshoot_named(client, group_with_members, member_ids):
@@ -67,7 +69,7 @@ def test_sum_overshoot_named(client, group_with_members, member_ids):
         client, group_id, "60.00", ana, {ana: "35.00", ben: "25.01"}
     )
     assert resp.status_code == 422
-    assert "too much" in resp.text
+    assert "too much" in resp.json()["detail"]
 
 
 def test_negative_share_rejected(client, group_with_members, member_ids):
@@ -83,16 +85,19 @@ def test_even_mode_remains_default(client, group_with_members, member_ids):
     group_id = group_with_members(["Ana", "Ben"])
     ana, ben = member_ids(group_id, ["Ana", "Ben"])
     resp = client.post(
-        f"/groups/{group_id}/expenses",
-        data={
+        f"/api/groups/{group_id}/expenses",
+        json={
             "description": "Lunch",
             "amount": "10.00",
             "payer_id": str(ana),
-            "participants": [str(ana), str(ben)],
+            "participant_ids": [str(ana), str(ben)],
         },
     )
     assert resp.status_code == 200
-    assert "is owed 5.00" in resp.text
+    by_member = {
+        uuid.UUID(b["member_id"]): b["balance_cents"] for b in resp.json()["balances"]
+    }
+    assert by_member[ana] == 500
 
 
 def test_validate_exact_shares_requires_participant_match():

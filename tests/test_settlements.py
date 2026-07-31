@@ -1,4 +1,5 @@
 import random
+import uuid
 
 from app.services.settlements import Payment, suggest_settlements
 
@@ -56,24 +57,27 @@ def test_plan_zeroes_balances_and_respects_bound():
         assert all(v == 0 for v in applied.values())
 
 
-def test_plan_shown_on_group_page(client, group_with_members, member_ids):
+def test_plan_included_in_group_detail(client, group_with_members, member_ids):
     group_id = group_with_members(["Ana", "Ben"])
     ana, ben = member_ids(group_id, ["Ana", "Ben"])
     client.post(
-        f"/groups/{group_id}/expenses",
-        data={
+        f"/api/groups/{group_id}/expenses",
+        json={
             "description": "Lunch",
             "amount": "10.00",
             "payer_id": str(ana),
-            "participants": [str(ana), str(ben)],
+            "participant_ids": [str(ana), str(ben)],
         },
     )
-    page = client.get(f"/groups/{group_id}").text
-    assert "pays" in page
-    assert "5.00" in page
+    detail = client.get(f"/api/groups/{group_id}").json()
+    settlements = [
+        (uuid.UUID(s["from_member"]), uuid.UUID(s["to_member"]), s["amount_cents"])
+        for s in detail["settlements"]
+    ]
+    assert settlements == [(ben, ana, 500)]
 
 
-def test_settled_group_message(client, group_with_members):
+def test_settled_group_has_empty_plan(client, group_with_members):
     group_id = group_with_members(["Ana", "Ben"])
-    page = client.get(f"/groups/{group_id}").text
-    assert "No payments needed" in page
+    detail = client.get(f"/api/groups/{group_id}").json()
+    assert detail["settlements"] == []

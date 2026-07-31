@@ -1,11 +1,12 @@
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
 import app.database as database
 from app.main import app
-from app.models import Group, Member
 
 
 @pytest.fixture
@@ -33,36 +34,30 @@ def client(engine):
 
 
 @pytest.fixture
-def group_with_members(client, engine):
+def group_with_members(client):
     def make(names: list[str], group_name: str = "Trip"):
-        resp = client.post("/groups", data={"name": group_name})
-        assert resp.status_code == 200
-        with Session(engine) as session:
-            group_id = session.exec(
-                select(Group.id).where(Group.name == group_name)
-            ).one()
-            for name in names:
-                resp = client.post(
-                    f"/groups/{group_id}/members", data={"name": name}
-                )
-                assert resp.status_code == 200
+        resp = client.post("/api/groups", json={"name": group_name})
+        assert resp.status_code == 201
+        group_id = uuid.UUID(resp.json()["id"])
+        member_ids = {}
+        for name in names:
+            resp = client.post(
+                f"/api/groups/{group_id}/members", json={"name": name}
+            )
+            assert resp.status_code == 200
+            for m in resp.json()["members"]:
+                member_ids[m["name"]] = uuid.UUID(m["id"])
+        make.member_ids = member_ids
         return group_id
 
     return make
 
 
 @pytest.fixture
-def member_ids(engine):
-    """Look up a group's member ids by name, in insertion order."""
+def member_ids(group_with_members):
+    """Return the last-created group's member ids by name, in insertion order."""
 
     def get(group_id, names: list[str]):
-        with Session(engine) as session:
-            members = {
-                m.name: m.id
-                for m in session.exec(
-                    select(Member).where(Member.group_id == group_id)
-                ).all()
-            }
-        return [members[name] for name in names]
+        return [group_with_members.member_ids[name] for name in names]
 
     return get
