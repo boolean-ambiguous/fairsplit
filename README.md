@@ -26,7 +26,7 @@ fixes the incentive structure:
   proposal → spec delta → design → tasks, merged into `openspec/specs/` — the
   always-current description of what the system does today.
 
-## The four change cycles
+## The five change cycles
 
 Each feature followed the same loop — **propose → validate → implement → test
 → archive** — and each step is a separate commit, so the full story is
@@ -38,6 +38,7 @@ readable in `git log`:
 | [`add-balance-tracking`](openspec/changes/archive/2026-07-31-add-balance-tracking/) | Per-member net balances | Zero-sum invariant spec'd and tested as a property over randomized expense sets |
 | [`add-settlement-suggestions`](openspec/changes/archive/2026-07-31-add-settlement-suggestions/) | "Who pays whom" plan | Greedy algorithm with a spec'd *n−1* payment bound; true minimality documented as a non-goal (it's subset-sum-hard) |
 | [`add-uneven-splits`](openspec/changes/archive/2026-07-31-add-uneven-splits/) | Exact-amount splits | A **MODIFIED** delta: the even-split requirement is RENAMED and rewritten to cover both modes — the spec evolves, it isn't append-only |
+| [`add-design-system`](openspec/changes/archive/2026-07-31-add-design-system/) | Design tokens, dark mode, component classes | Accessible contrast (WCAG ≥4.5:1) is a spec'd, *computed* requirement — token values were checked against the luminance formula before being written down, and a test re-checks every pairing on every run |
 
 Two moments worth clicking into:
 
@@ -60,9 +61,10 @@ Two moments worth clicking into:
   balances/settlements needed zero changes. That reasoning is written down in
   each `design.md`, including the alternatives that were rejected.
 - Every user-visible behavior in `openspec/specs/` has a WHEN/THEN scenario
-  and a corresponding test — 70 tests, including property-style checks
+  and a corresponding test — 78 tests, including property-style checks
   (shares sum to totals; balances sum to zero; settlement plans zero every
-  balance within the *n−1* bound).
+  balance within the *n−1* bound; every design-system color pairing clears
+  WCAG AA contrast in both light and dark themes).
 
 ## Running it
 
