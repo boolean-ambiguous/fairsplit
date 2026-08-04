@@ -1,7 +1,9 @@
+import logging
+
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlmodel import Session
 
-from app.config import resolve_frontend_base_url
+from app.config import UntrustedRequestOriginError, resolve_frontend_base_url
 from app.database import get_session
 from app.models import User
 from app.schemas import NameRequest, SignupRequest, UpdateMeRequest, UserOut, VerifyRequest
@@ -16,6 +18,8 @@ from app.services.auth import (
 )
 from app.services.email import send_magic_link
 
+logger = logging.getLogger("fairsplit.auth")
+
 router = APIRouter(prefix="/api/auth")
 
 
@@ -29,7 +33,19 @@ def signup(body: SignupRequest, request: Request, session: Session = Depends(get
         user, token = start_signup(session, body.email)
     except AuthError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    base_url = resolve_frontend_base_url(str(request.base_url))
+    try:
+        base_url = resolve_frontend_base_url(str(request.base_url))
+    except UntrustedRequestOriginError:
+        logger.error(
+            "Rejected signup: request Host %r is not loopback/private and "
+            "FAIRSPLIT_FRONTEND_URL is not set. Set FAIRSPLIT_FRONTEND_URL "
+            "to the app's real public URL to fix this.",
+            request.headers.get("host"),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Server misconfiguration: unable to determine the frontend URL for magic links.",
+        )
     link = f"{base_url}/verify?token={token.token}"
     send_magic_link(user.email, link)
     return {"message": "Check your email for a magic link."}

@@ -30,7 +30,11 @@ def session(engine):
 
 @pytest.fixture
 def client(engine):
-    with TestClient(app) as client:
+    # base_url must be a loopback/private host — request.base_url feeds
+    # magic-link generation (app/config.py::resolve_frontend_base_url),
+    # which only trusts loopback/private-network origins. The TestClient
+    # default ("http://testserver") is neither.
+    with TestClient(app, base_url="http://localhost") as client:
         yield client
 
 
