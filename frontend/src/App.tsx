@@ -1,45 +1,109 @@
 import { useMemo } from 'react'
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
-import { CssBaseline, ThemeProvider, useMediaQuery } from '@mui/material'
-import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material'
+import type { ReactNode } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { Box, CircularProgress, CssBaseline, ThemeProvider } from '@mui/material'
 import { buildTheme } from './theme'
+import { AuthProvider, useAuth } from './auth/AuthContext'
+import SignupPage from './auth/SignupPage'
+import VerifyPage from './auth/VerifyPage'
+import NamePage from './auth/NamePage'
 import Dashboard from './pages/Dashboard'
-import GroupList from './pages/GroupList'
 import GroupDetail from './pages/GroupDetail'
 
-function App() {
-  const prefersDark = useMediaQuery('(prefers-color-scheme: dark)')
-  const theme = useMemo(() => buildTheme(prefersDark ? 'dark' : 'light'), [prefersDark])
+function Splash() {
+  return (
+    <Box sx={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <CircularProgress />
+    </Box>
+  )
+}
 
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) return <Splash />
+  if (!user) return <Navigate to="/signup" replace />
+  if (!user.name) return <Navigate to="/name" replace />
+  return <>{children}</>
+}
+
+function RedirectIfAuthed({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) return <Splash />
+  if (user && user.name) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+function NamePageGate() {
+  const { user, loading } = useAuth()
+  if (loading) return <Splash />
+  if (!user) return <Navigate to="/signup" replace />
+  if (user.name) return <Navigate to="/" replace />
+  return <NamePage />
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route
+        path="/signup"
+        element={
+          <RedirectIfAuthed>
+            <SignupPage />
+          </RedirectIfAuthed>
+        }
+      />
+      <Route path="/verify" element={<VerifyPage />} />
+      <Route path="/name" element={<NamePageGate />} />
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <Dashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/groups/:groupId"
+        element={
+          <RequireAuth>
+            <GroupDetail />
+          </RequireAuth>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
+function ThemedApp() {
+  const { user } = useAuth()
+  const theme = useMemo(() => buildTheme(user?.theme ?? 'dark'), [user?.theme])
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <BrowserRouter>
-        <AppBar position="static" color="transparent" elevation={0}>
-          <Toolbar>
-            <Typography
-              variant="h6"
-              component={Link}
-              to="/"
-              color="primary"
-              sx={{ fontWeight: 700, textDecoration: 'none', flexGrow: 1 }}
-            >
-              FairSplit
-            </Typography>
-            <Box>
-              <Button component={Link} to="/groups">
-                Groups
-              </Button>
-            </Box>
-          </Toolbar>
-        </AppBar>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/groups" element={<GroupList />} />
-          <Route path="/groups/:groupId" element={<GroupDetail />} />
-        </Routes>
-      </BrowserRouter>
+      <Box
+        sx={{
+          minHeight: '100dvh',
+          bgcolor: 'background.default',
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
+        <Box sx={{ width: '100%', maxWidth: 480, minHeight: '100dvh', position: 'relative' }}>
+          <AppRoutes />
+        </Box>
+      </Box>
     </ThemeProvider>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <ThemedApp />
+      </AuthProvider>
+    </BrowserRouter>
   )
 }
 

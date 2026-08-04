@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 import pytest
 from sqlmodel import Session
@@ -6,11 +7,14 @@ from sqlmodel import Session
 from app.services.balances import compute_balances
 from app.services.expenses import ExpenseError, validate_exact_shares
 
+TODAY = date.today().isoformat()
+
 
 def post_exact(client, group_id, amount, payer_id, shares):
     body = {
         "description": "Dinner",
         "amount": amount,
+        "date": TODAY,
         "payer_id": str(payer_id),
         "split_mode": "exact",
         "participant_ids": [str(m) for m in shares],
@@ -89,6 +93,7 @@ def test_even_mode_remains_default(client, group_with_members, member_ids):
         json={
             "description": "Lunch",
             "amount": "10.00",
+            "date": TODAY,
             "payer_id": str(ana),
             "participant_ids": [str(ana), str(ben)],
         },

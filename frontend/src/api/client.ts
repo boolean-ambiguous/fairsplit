@@ -1,9 +1,15 @@
 import type {
   Dashboard,
   DashboardRange,
+  Expense,
   ExpenseCreate,
   Group,
+  GroupCreate,
   GroupDetail,
+  GroupUpdate,
+  Member,
+  SettlementCreate,
+  User,
 } from './types'
 
 export class ApiError extends Error {
@@ -18,6 +24,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(`/api${path}`, {
     ...init,
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   })
   if (!resp.ok) {
@@ -26,26 +33,70 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)
     throw new ApiError(detail, resp.status)
   }
+  if (resp.status === 204) return undefined as T
   return resp.json() as Promise<T>
 }
 
 export const api = {
+  // auth
+  signup: (email: string) =>
+    request<{ message: string }>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  verify: (token: string) =>
+    request<User>('/auth/verify', { method: 'POST', body: JSON.stringify({ token }) }),
+  setName: (name: string) =>
+    request<User>('/auth/name', { method: 'POST', body: JSON.stringify({ name }) }),
+  me: () => request<User>('/auth/me'),
+  updateMe: (body: { name?: string; theme?: 'dark' | 'light' }) =>
+    request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
+  logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
+
+  // groups
   listGroups: () => request<Group[]>('/groups'),
-  createGroup: (name: string) =>
-    request<Group>('/groups', { method: 'POST', body: JSON.stringify({ name }) }),
+  createGroup: (body: GroupCreate) =>
+    request<Group>('/groups', { method: 'POST', body: JSON.stringify(body) }),
   getGroup: (groupId: string) => request<GroupDetail>(`/groups/${groupId}`),
-  addMember: (groupId: string, name: string) =>
+  updateGroup: (groupId: string, body: GroupUpdate) =>
+    request<GroupDetail>(`/groups/${groupId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  addMember: (groupId: string, name: string, email?: string) =>
     request<GroupDetail>(`/groups/${groupId}/members`, {
       method: 'POST',
+      body: JSON.stringify({ name, email }),
+    }),
+  renameMember: (groupId: string, memberId: string, name: string) =>
+    request<GroupDetail>(`/groups/${groupId}/members/${memberId}`, {
+      method: 'PATCH',
       body: JSON.stringify({ name }),
     }),
+  removeMember: (groupId: string, memberId: string) =>
+    request<GroupDetail>(`/groups/${groupId}/members/${memberId}`, { method: 'DELETE' }),
+
+  // expenses
   addExpense: (groupId: string, body: ExpenseCreate) =>
     request<GroupDetail>(`/groups/${groupId}/expenses`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  getDashboard: (nickname: string, range: DashboardRange) =>
-    request<Dashboard>(
-      `/dashboard?nickname=${encodeURIComponent(nickname)}&range=${range}`,
-    ),
+  updateExpense: (groupId: string, expenseId: string, body: ExpenseCreate) =>
+    request<GroupDetail>(`/groups/${groupId}/expenses/${expenseId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteExpense: (groupId: string, expenseId: string) =>
+    request<GroupDetail>(`/groups/${groupId}/expenses/${expenseId}`, { method: 'DELETE' }),
+
+  // settlements
+  recordSettlement: (groupId: string, body: SettlementCreate) =>
+    request<GroupDetail>(`/groups/${groupId}/settlements`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  // dashboard
+  getDashboard: (range: DashboardRange) =>
+    request<Dashboard>(`/dashboard?range=${range}`),
 }
+
+export type { Member, Expense }

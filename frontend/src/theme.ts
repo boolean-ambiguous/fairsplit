@@ -1,30 +1,36 @@
 import { createTheme, type PaletteMode } from '@mui/material/styles'
 
-// Token values carried forward unchanged from the archived add-design-system
-// change (openspec/changes/archive/2026-07-31-add-design-system/design.md) --
-// already verified against WCAG AA contrast (>=4.5:1), not re-derived here.
+// Ported from the Nocturne design-system tokens (_ds/nocturne/styles.css) in
+// the Claude Design handoff — same bg/surface/text/divider/accent values.
+// The accent (#9184d9, a blurple) reads as "informational" rather than
+// "alarming," so it — not red/green — carries both credit and debt states
+// throughout the app; only lightness/weight distinguish them.
 const tokens = {
-  light: {
-    bg: '#f7f7f5',
-    surface: '#ffffff',
-    ink: '#1f2328',
-    muted: '#57606a',
-    accent: '#0f766e',
-    accentInk: '#ffffff',
-    positive: '#15803d',
-    negative: '#b91c1c',
-    border: '#e5e7eb',
-  },
   dark: {
-    bg: '#0f1115',
-    surface: '#1a1d23',
-    ink: '#e8e8e6',
-    muted: '#9aa4b2',
-    accent: '#5eead4',
-    accentInk: '#08201d',
-    positive: '#4ade80',
-    negative: '#fca5a5',
-    border: '#2a2f3a',
+    bg: '#161826',
+    surface: '#232532',
+    ink: '#e9e9ed',
+    muted: '#75798c',
+    muted2: '#b2b6ca',
+    accent: '#9184d9',
+    accentInk: '#161826',
+    owed: '#d2cefd',
+    owe: '#b2b6ca',
+    border: 'rgba(233,233,237,0.16)',
+    border2: 'rgba(233,233,237,0.10)',
+  },
+  light: {
+    bg: '#e4e7f5',
+    surface: '#f8f9fd',
+    ink: '#292b31',
+    muted: '#75798c',
+    muted2: '#595d6c',
+    accent: '#796cbf',
+    accentInk: '#f8f9fd',
+    owed: '#5d5294',
+    owe: '#595d6c',
+    border: 'rgba(41,43,49,0.14)',
+    border2: 'rgba(41,43,49,0.08)',
   },
 } as const
 
@@ -34,12 +40,30 @@ export function buildTheme(mode: PaletteMode) {
     palette: {
       mode,
       background: { default: t.bg, paper: t.surface },
-      text: { primary: t.ink, secondary: t.muted },
+      text: { primary: t.ink, secondary: t.muted2 },
       primary: { main: t.accent, contrastText: t.accentInk },
-      success: { main: t.positive },
-      error: { main: t.negative },
+      success: { main: t.owed, contrastText: mode === 'dark' ? '#161826' : '#f8f9fd' },
+      error: { main: t.owe, contrastText: mode === 'dark' ? '#161826' : '#f8f9fd' },
       divider: t.border,
     },
-    shape: { borderRadius: 8 },
+    shape: { borderRadius: 10 },
+    typography: {
+      fontFamily:
+        'Inter, system-ui, -apple-system, "Segoe UI", sans-serif',
+    },
+    components: {
+      MuiButton: {
+        styleOverrides: {
+          root: { textTransform: 'none', fontWeight: 500 },
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: { fontWeight: 500 },
+        },
+      },
+    },
   })
 }
+
+export const themeTokens = tokens

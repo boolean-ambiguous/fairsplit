@@ -1,7 +1,7 @@
 [project]
 name = "fairsplit"
 version = "0.1.0"
-description = "Expense-splitting web app built spec-first with OpenSpec"
+description = "FairSplit — a small expense-splitting web app for groups"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",

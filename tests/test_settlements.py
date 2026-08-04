@@ -1,7 +1,10 @@
 import random
 import uuid
+from datetime import date
 
 from app.services.settlements import Payment, suggest_settlements
+
+TODAY = date.today().isoformat()
 
 
 def test_two_party_debt():
@@ -65,6 +68,7 @@ def test_plan_included_in_group_detail(client, group_with_members, member_ids):
         json={
             "description": "Lunch",
             "amount": "10.00",
+            "date": TODAY,
             "payer_id": str(ana),
             "participant_ids": [str(ana), str(ben)],
         },
@@ -72,7 +76,7 @@ def test_plan_included_in_group_detail(client, group_with_members, member_ids):
     detail = client.get(f"/api/groups/{group_id}").json()
     settlements = [
         (uuid.UUID(s["from_member"]), uuid.UUID(s["to_member"]), s["amount_cents"])
-        for s in detail["settlements"]
+        for s in detail["suggested_settlements"]
     ]
     assert settlements == [(ben, ana, 500)]
 
@@ -80,4 +84,39 @@ def test_plan_included_in_group_detail(client, group_with_members, member_ids):
 def test_settled_group_has_empty_plan(client, group_with_members):
     group_id = group_with_members(["Ana", "Ben"])
     detail = client.get(f"/api/groups/{group_id}").json()
-    assert detail["settlements"] == []
+    assert detail["suggested_settlements"] == []
+
+
+def test_record_settlement_offsets_balances(client, group_with_members, member_ids):
+    group_id = group_with_members(["Ana", "Ben"])
+    ana, ben = member_ids(group_id, ["Ana", "Ben"])
+    client.post(
+        f"/api/groups/{group_id}/expenses",
+        json={
+            "description": "Lunch",
+            "amount": "10.00",
+            "date": TODAY,
+            "payer_id": str(ana),
+            "participant_ids": [str(ana), str(ben)],
+        },
+    )
+    resp = client.post(
+        f"/api/groups/{group_id}/settlements",
+        json={"from_member": str(ben), "to_member": str(ana), "amount": "5.00"},
+    )
+    assert resp.status_code == 200
+    detail = resp.json()
+    by_member = {uuid.UUID(b["member_id"]): b["balance_cents"] for b in detail["balances"]}
+    assert by_member[ana] == 0
+    assert by_member[ben] == 0
+    assert len(detail["settlement_history"]) == 1
+    assert detail["suggested_settlements"] == []
+
+
+def test_record_settlement_requires_group_members(client, group_with_members):
+    group_id = group_with_members(["Ana", "Ben"])
+    resp = client.post(
+        f"/api/groups/{group_id}/settlements",
+        json={"from_member": str(uuid.uuid4()), "to_member": str(uuid.uuid4()), "amount": "5.00"},
+    )
+    assert resp.status_code == 422

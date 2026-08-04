@@ -1,0 +1,96 @@
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from sqlmodel import Session
+
+from app.config import FRONTEND_BASE_URL
+from app.database import get_session
+from app.models import User
+from app.schemas import NameRequest, SignupRequest, UpdateMeRequest, UserOut, VerifyRequest
+from app.services.auth import (
+    SESSION_COOKIE,
+    AuthError,
+    clear_login_session,
+    consume_magic_link_token,
+    create_login_session,
+    get_current_user,
+    start_signup,
+)
+from app.services.email import send_magic_link
+
+router = APIRouter(prefix="/api/auth")
+
+
+def _user_out(user: User) -> UserOut:
+    return UserOut(id=user.id, email=user.email, name=user.name, theme=user.theme)
+
+
+@router.post("/signup", status_code=202)
+def signup(body: SignupRequest, session: Session = Depends(get_session)):
+    try:
+        user, token = start_signup(session, body.email)
+    except AuthError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    link = f"{FRONTEND_BASE_URL}/verify?token={token.token}"
+    send_magic_link(user.email, link)
+    return {"message": "Check your email for a magic link."}
+
+
+@router.post("/verify", response_model=UserOut)
+def verify(body: VerifyRequest, response: Response, session: Session = Depends(get_session)):
+    try:
+        user = consume_magic_link_token(session, body.token)
+    except AuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    create_login_session(session, user, response)
+    return _user_out(user)
+
+
+@router.get("/me", response_model=UserOut)
+def me(current_user: User = Depends(get_current_user)):
+    return _user_out(current_user)
+
+
+@router.post("/name", response_model=UserOut)
+def set_name(
+    body: NameRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Name is required")
+    current_user.name = name
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    return _user_out(current_user)
+
+
+@router.patch("/me", response_model=UserOut)
+def update_me(
+    body: UpdateMeRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if body.name is not None:
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(status_code=422, detail="Name is required")
+        current_user.name = name
+    if body.theme is not None:
+        if body.theme not in ("dark", "light"):
+            raise HTTPException(status_code=422, detail="Theme must be 'dark' or 'light'")
+        current_user.theme = body.theme
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    return _user_out(current_user)
+
+
+@router.post("/logout")
+def logout(
+    response: Response,
+    session: Session = Depends(get_session),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+):
+    clear_login_session(session, session_token, response)
+    return {"ok": True}

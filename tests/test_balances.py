@@ -1,9 +1,12 @@
 import random
 import uuid
+from datetime import date
 
 from sqlmodel import Session
 
 from app.services.balances import compute_balances
+
+TODAY = date.today().isoformat()
 
 
 def add_expense(client, group_id, description, amount, payer_id, participants):
@@ -12,6 +15,7 @@ def add_expense(client, group_id, description, amount, payer_id, participants):
         json={
             "description": description,
             "amount": amount,
+            "date": TODAY,
             "payer_id": str(payer_id),
             "participant_ids": [str(p) for p in participants],
         },
@@ -98,3 +102,12 @@ def test_expense_response_includes_updated_balances(
         uuid.UUID(b["member_id"]): b["balance_cents"] for b in resp.json()["balances"]
     }
     assert by_member[ana] == 500
+
+
+def test_my_positions_reflect_direct_counterparty(client, group_with_members, member_ids):
+    group_id = group_with_members(["Ana", "Ben", "Cara"])
+    ana, ben, cara = member_ids(group_id, ["Ana", "Ben", "Cara"])
+    add_expense(client, group_id, "Dinner", "60.00", ana, [ana, ben, cara])
+    detail = client.get(f"/api/groups/{group_id}").json()
+    positions = {uuid.UUID(p["member_id"]): p["balance_cents"] for p in detail["my_positions"]}
+    assert positions == {ben: 2000, cara: 2000}

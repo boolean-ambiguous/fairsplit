@@ -1,330 +1,268 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Checkbox,
-  Chip,
-  Container,
-  FormControlLabel,
-  List,
-  ListItem,
-  MenuItem,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from '@mui/material'
-import { api, ApiError } from '../api/client'
-import type { GroupDetail as GroupDetailData, SplitMode } from '../api/types'
-import { formatCents } from '../money'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Alert, Box, Button, Container, IconButton, Stack, Typography } from '@mui/material'
+import { api } from '../api/client'
+import type { Expense, GroupDetail as GroupDetailData } from '../api/types'
+import { colorFor, formatCurrency, initials } from '../money'
+import { memberDisplayName, splitSummary } from '../splitSummary'
+import { useAuth } from '../auth/AuthContext'
+import AppHeader from '../components/AppHeader'
+import AddExpenseDialog from '../components/AddExpenseDialog'
+import ExpenseDetailDialog from '../components/ExpenseDetailDialog'
+import GroupEditDialog from '../components/GroupEditDialog'
+import SettleUpDialog from '../components/SettleUpDialog'
+import { EditIcon, TrashIcon } from '../components/icons'
+
+function formatDate(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
 
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>()
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [group, setGroup] = useState<GroupDetailData | null>(null)
   const [notFound, setNotFound] = useState(false)
+  const [forbidden, setForbidden] = useState(false)
 
-  const [memberName, setMemberName] = useState('')
-  const [memberError, setMemberError] = useState<string | null>(null)
-
-  const [description, setDescription] = useState('')
-  const [amount, setAmount] = useState('')
-  const [payerId, setPayerId] = useState('')
-  const [participantIds, setParticipantIds] = useState<Set<string>>(new Set())
-  const [splitMode, setSplitMode] = useState<SplitMode>('even')
-  const [shares, setShares] = useState<Record<string, string>>({})
-  const [expenseError, setExpenseError] = useState<string | null>(null)
+  const [showAddExpense, setShowAddExpense] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const [viewingExpense, setViewingExpense] = useState<Expense | null>(null)
+  const [showEditGroup, setShowEditGroup] = useState(false)
+  const [showSettleUp, setShowSettleUp] = useState(false)
 
   const refresh = () => {
     if (!groupId) return
     api
       .getGroup(groupId)
-      .then((data) => {
-        setGroup(data)
-        setParticipantIds(new Set(data.members.map((m) => m.id)))
-        setPayerId((prev) => prev || data.members[0]?.id || '')
-      })
+      .then(setGroup)
       .catch((err) => {
-        if (err instanceof ApiError && err.status === 404) setNotFound(true)
+        if (err.status === 404) setNotFound(true)
+        if (err.status === 403) setForbidden(true)
       })
   }
 
   useEffect(refresh, [groupId])
 
-  if (notFound) {
+  if (notFound || forbidden) {
     return (
       <Container maxWidth="sm" sx={{ py: 4 }}>
-        <Alert severity="error">Group not found.</Alert>
+        <Alert severity="error">
+          {notFound ? 'Group not found.' : "You're not a member of this group."}
+        </Alert>
       </Container>
     )
   }
   if (!group) return null
 
-  const handleAddMember = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setMemberError(null)
-    try {
-      await api.addMember(group.id, memberName)
-      setMemberName('')
-      refresh()
-    } catch (err) {
-      if (err instanceof ApiError) setMemberError(err.message)
-    }
-  }
+  const membersById = Object.fromEntries(group.members.map((m) => [m.id, m]))
+  const myMember = group.members.find((m) => m.user_id === user?.id) ?? null
+  const myMemberId = myMember?.id ?? null
 
-  const toggleParticipant = (id: string) => {
-    setParticipantIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const handleAddExpense = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setExpenseError(null)
-    try {
-      await api.addExpense(group.id, {
-        description,
-        amount,
-        payer_id: payerId,
-        participant_ids: Array.from(participantIds),
-        split_mode: splitMode,
-        exact_shares:
-          splitMode === 'exact'
-            ? Object.fromEntries(
-                Array.from(participantIds).map((id) => [id, shares[id] ?? '0']),
-              )
-            : undefined,
-      })
-      setDescription('')
-      setAmount('')
-      setShares({})
-      refresh()
-    } catch (err) {
-      if (err instanceof ApiError) setExpenseError(err.message)
-    }
-  }
-
-  const memberName_ = (id: string) => group.members.find((m) => m.id === id)?.name ?? id
+  const sortedExpenses = [...group.expenses].sort((a, b) => b.date.localeCompare(a.date))
+  const sortedSettlements = [...group.settlement_history].sort((a, b) =>
+    b.settled_at.localeCompare(a.settled_at),
+  )
 
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        {group.name}
-      </Typography>
+    <>
+      <AppHeader title={group.name} onBack={() => navigate('/')} onEditGroup={() => setShowEditGroup(true)} />
+      <Box sx={{ px: 2.5, pb: 12, display: 'flex', flexDirection: 'column', gap: 2.75 }}>
+        <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', rowGap: 0.75 }}>
+          {group.members.map((m) => (
+            <Stack
+              key={m.id}
+              direction="row"
+              spacing={0.75}
+              sx={{ bgcolor: 'background.paper', borderRadius: '20px', pl: 0.5, pr: 1.25, py: 0.5, alignItems: 'center' }}
+            >
+              <Box
+                sx={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  bgcolor: colorFor(m.id),
+                  color: '#e7e5fe',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 9,
+                }}
+              >
+                {initials(m.id === myMemberId ? user?.name ?? '' : m.name)}
+              </Box>
+              <Typography variant="caption">{m.id === myMemberId ? 'You' : m.name}</Typography>
+            </Stack>
+          ))}
+        </Stack>
 
-      <Typography variant="h6" component="h2" sx={{ mt: 3 }}>
-        Members
-      </Typography>
-      <Card variant="outlined" sx={{ mb: 2 }}>
-        <CardContent>
-          <Box component="form" onSubmit={handleAddMember}>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-end' }}>
-              <TextField
-                label="Add member"
-                value={memberName}
-                onChange={(e) => setMemberName(e.target.value)}
-                size="small"
-              />
-              <Button type="submit" variant="contained">
-                Add
-              </Button>
+        <Box>
+          {group.my_positions.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              You're all settled up in this group! 🎉
+            </Typography>
+          ) : (
+            <Stack spacing={1}>
+              {group.my_positions.map((p) => (
+                <Box key={p.member_id} sx={{ bgcolor: 'background.paper', borderRadius: '8px', p: 1.25 }}>
+                  <Typography variant="body2">
+                    {p.balance_cents > 0
+                      ? `${memberDisplayName(p.member_id, myMemberId, membersById)} owes you ${formatCurrency(p.balance_cents, group.currency)}`
+                      : `You owe ${memberDisplayName(p.member_id, myMemberId, membersById)} ${formatCurrency(-p.balance_cents, group.currency)}`}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+          )}
+        </Box>
+
+        <Stack direction="row" spacing={1.25}>
+          <Button variant="outlined" fullWidth onClick={() => { setEditingExpense(null); setShowAddExpense(true) }}>
+            Add expense
+          </Button>
+          <Button variant="outlined" color="inherit" fullWidth onClick={() => setShowSettleUp(true)}>
+            Settle up
+          </Button>
+        </Stack>
+
+        <Box>
+          <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Expenses
+          </Typography>
+          <Stack>
+            {sortedExpenses.map((e) => (
+              <Box
+                key={e.id}
+                onClick={() => setViewingExpense(e)}
+                sx={{ py: 1.5, borderBottom: 1, borderColor: 'divider', cursor: 'pointer' }}
+              >
+                <Stack direction="row" spacing={1.25} sx={{ justifyContent: 'space-between' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {e.description}
+                  </Typography>
+                  <Stack direction="row" spacing={1} sx={{ flex: 'none', alignItems: 'center' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500, minWidth: 64, textAlign: 'right' }}>
+                      {formatCurrency(e.amount_cents, group.currency)}
+                    </Typography>
+                    <Stack direction="row" spacing={0.75} sx={{ width: 60, justifyContent: 'flex-end' }}>
+                      <IconButton
+                        size="small"
+                        title="Edit expense"
+                        onClick={(evt) => {
+                          evt.stopPropagation()
+                          setEditingExpense(e)
+                          setShowAddExpense(true)
+                        }}
+                        sx={{ width: 26, height: 26, border: 1, borderColor: 'primary.main', color: 'primary.main', borderRadius: '6px' }}
+                      >
+                        <EditIcon size={13} />
+                      </IconButton>
+                      {e.can_delete && (
+                        <IconButton
+                          size="small"
+                          title="Delete expense"
+                          onClick={async (evt) => {
+                            evt.stopPropagation()
+                            if (!groupId) return
+                            if (!window.confirm('Delete this expense?')) return
+                            await api.deleteExpense(groupId, e.id)
+                            refresh()
+                          }}
+                          sx={{ width: 26, height: 26, border: 1, borderColor: 'error.main', color: 'error.main', borderRadius: '6px' }}
+                        >
+                          <TrashIcon size={13} />
+                        </IconButton>
+                      )}
+                    </Stack>
+                  </Stack>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                  Paid by {memberDisplayName(e.payer_id, myMemberId, membersById)} · {formatDate(e.date)}
+                </Typography>
+                <Typography variant="caption" color="success.main" sx={{ display: 'block' }}>
+                  {splitSummary(e, myMemberId, membersById, group.currency)}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+
+        {sortedSettlements.length > 0 && (
+          <Box>
+            <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Settled up
+            </Typography>
+            <Stack>
+              {sortedSettlements.map((s) => (
+                <Box key={s.id} sx={{ py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+                  <Stack direction="row" spacing={1.25} sx={{ justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {memberDisplayName(s.from_member, myMemberId, membersById)} paid{' '}
+                      {memberDisplayName(s.to_member, myMemberId, membersById)}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500, flex: 'none' }}>
+                      {formatCurrency(s.amount_cents, group.currency)}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    Settled {formatDate(s.settled_at.slice(0, 10))}
+                  </Typography>
+                </Box>
+              ))}
             </Stack>
           </Box>
-          {memberError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {memberError}
-            </Alert>
-          )}
-          <List dense>
-            {group.members.map((m) => (
-              <ListItem key={m.id} disableGutters>
-                {m.name}
-              </ListItem>
-            ))}
-          </List>
-        </CardContent>
-      </Card>
+        )}
+      </Box>
 
-      <Typography variant="h6" component="h2">
-        Balances
-      </Typography>
-      <Card variant="outlined" sx={{ mb: 2 }}>
-        <CardContent>
-          <List dense>
-            {group.balances.map((b) => (
-              <ListItem key={b.member_id} disableGutters>
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <Typography>{memberName_(b.member_id)}:</Typography>
-                  {b.balance_cents > 0 && (
-                    <Chip
-                      size="small"
-                      color="success"
-                      label={`is owed ${formatCents(b.balance_cents)}`}
-                    />
-                  )}
-                  {b.balance_cents < 0 && (
-                    <Chip
-                      size="small"
-                      color="error"
-                      label={`owes ${formatCents(-b.balance_cents)}`}
-                    />
-                  )}
-                  {b.balance_cents === 0 && (
-                    <Chip size="small" label="settled up" variant="outlined" />
-                  )}
-                </Stack>
-              </ListItem>
-            ))}
-          </List>
-        </CardContent>
-      </Card>
-
-      <Typography variant="h6" component="h2">
-        Settle up
-      </Typography>
-      <Card variant="outlined" sx={{ mb: 2 }}>
-        <CardContent>
-          {group.settlements.length === 0 ? (
-            <Typography color="text.secondary">
-              No payments needed — everyone is settled up.
-            </Typography>
-          ) : (
-            <List dense>
-              {group.settlements.map((s, i) => (
-                <ListItem key={i} disableGutters>
-                  <strong>{memberName_(s.from_member)}</strong>&nbsp;pays&nbsp;
-                  <strong>{memberName_(s.to_member)}</strong>&nbsp;
-                  {formatCents(s.amount_cents)}
-                </ListItem>
-              ))}
-            </List>
-          )}
-        </CardContent>
-      </Card>
-
-      <Typography variant="h6" component="h2">
-        Expenses
-      </Typography>
-      <Card variant="outlined">
-        <CardContent>
-          {group.members.length === 0 ? (
-            <Typography color="text.secondary">
-              Add members before recording expenses.
-            </Typography>
-          ) : (
-            <Box component="form" onSubmit={handleAddExpense}>
-              <Stack spacing={2}>
-                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                  <TextField
-                    label="Description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    size="small"
-                    required
-                  />
-                  <TextField
-                    label="Amount"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    size="small"
-                    placeholder="0.00"
-                    required
-                  />
-                  <TextField
-                    select
-                    label="Paid by"
-                    value={payerId}
-                    onChange={(e) => setPayerId(e.target.value)}
-                    size="small"
-                  >
-                    {group.members.map((m) => (
-                      <MenuItem key={m.id} value={m.id}>
-                        {m.name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  <TextField
-                    select
-                    label="Split"
-                    value={splitMode}
-                    onChange={(e) => setSplitMode(e.target.value as SplitMode)}
-                    size="small"
-                  >
-                    <MenuItem value="even">Evenly</MenuItem>
-                    <MenuItem value="exact">Exact amounts</MenuItem>
-                  </TextField>
-                </Stack>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Split among
-                  </Typography>
-                  <Stack spacing={0.5}>
-                    {group.members.map((m) => (
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} key={m.id}>
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={participantIds.has(m.id)}
-                              onChange={() => toggleParticipant(m.id)}
-                            />
-                          }
-                          label={m.name}
-                        />
-                        {splitMode === 'exact' && participantIds.has(m.id) && (
-                          <TextField
-                            size="small"
-                            placeholder="0.00"
-                            value={shares[m.id] ?? ''}
-                            onChange={(e) =>
-                              setShares((prev) => ({ ...prev, [m.id]: e.target.value }))
-                            }
-                            sx={{ width: 90 }}
-                          />
-                        )}
-                      </Stack>
-                    ))}
-                  </Stack>
-                </Box>
-                <Button type="submit" variant="contained" sx={{ alignSelf: 'flex-start' }}>
-                  Add expense
-                </Button>
-                {expenseError && <Alert severity="error">{expenseError}</Alert>}
-              </Stack>
-            </Box>
-          )}
-
-          {group.expenses.length > 0 && (
-            <Table size="small" sx={{ mt: 2 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Description</TableCell>
-                  <TableCell>Paid by</TableCell>
-                  <TableCell align="right">Amount</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {group.expenses.map((e) => (
-                  <TableRow key={e.id}>
-                    <TableCell>{e.description}</TableCell>
-                    <TableCell>{memberName_(e.payer_id)}</TableCell>
-                    <TableCell align="right">{formatCents(e.amount_cents)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-    </Container>
+      <AddExpenseDialog
+        open={showAddExpense}
+        group={group}
+        myMemberId={myMemberId}
+        editing={editingExpense}
+        onClose={() => setShowAddExpense(false)}
+        onSaved={() => {
+          setShowAddExpense(false)
+          setViewingExpense(null)
+          refresh()
+        }}
+      />
+      <ExpenseDetailDialog
+        open={!!viewingExpense}
+        group={group}
+        expense={viewingExpense ? group.expenses.find((e) => e.id === viewingExpense.id) ?? viewingExpense : null}
+        myMemberId={myMemberId}
+        onClose={() => setViewingExpense(null)}
+        onEdit={(e) => {
+          setEditingExpense(e)
+          setViewingExpense(null)
+          setShowAddExpense(true)
+        }}
+        onDelete={async (e) => {
+          if (!groupId) return
+          if (!window.confirm('Delete this expense?')) return
+          await api.deleteExpense(groupId, e.id)
+          setViewingExpense(null)
+          refresh()
+        }}
+      />
+      <GroupEditDialog
+        open={showEditGroup}
+        group={group}
+        onClose={() => setShowEditGroup(false)}
+        onSaved={() => {
+          setShowEditGroup(false)
+          refresh()
+        }}
+      />
+      <SettleUpDialog
+        open={showSettleUp}
+        group={group}
+        myMemberId={myMemberId}
+        onClose={() => setShowSettleUp(false)}
+        onSettled={() => {
+          refresh()
+        }}
+      />
+    </>
   )
 }

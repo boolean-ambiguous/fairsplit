@@ -2,11 +2,12 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
 
 import app.database as database
 from app.main import app
+from app.models import MagicLinkToken
 
 
 @pytest.fixture
@@ -34,20 +35,58 @@ def client(engine):
 
 
 @pytest.fixture
-def group_with_members(client):
+def signed_in(client, engine):
+    """Sign up + verify + name-step a fresh user; returns (client, name) with
+    the TestClient's cookies carrying the session for subsequent requests."""
+
+    def make(name: str, email: str | None = None):
+        email = email or f"{name.lower().replace(' ', '.')}@example.com"
+        resp = client.post("/api/auth/signup", json={"email": email})
+        assert resp.status_code == 202, resp.text
+
+        with Session(engine) as session:
+            from app.models import User
+
+            user = session.exec(select(User).where(User.email == email.lower())).first()
+            assert user is not None
+            token = session.exec(
+                select(MagicLinkToken)
+                .where(MagicLinkToken.user_id == user.id)
+                .order_by(MagicLinkToken.created_at.desc())
+            ).first()
+            assert token is not None
+
+        resp = client.post("/api/auth/verify", json={"token": token.token})
+        assert resp.status_code == 200, resp.text
+
+        resp = client.post("/api/auth/name", json={"name": name})
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    return make
+
+
+@pytest.fixture
+def group_with_members(client, signed_in):
+    """Signs in as the first name in the list (the group creator), then
+    invites the rest as placeholder members. Returns the group id; the
+    TestClient ends up authenticated as the first member."""
+
     def make(names: list[str], group_name: str = "Trip"):
-        resp = client.post("/api/groups", json={"name": group_name})
-        assert resp.status_code == 201
+        assert names, "group_with_members needs at least one name"
+        signed_in(names[0])
+        resp = client.post(
+            "/api/groups",
+            json={
+                "name": group_name,
+                "currency": "USD",
+                "invites": [{"name": n} for n in names[1:]],
+            },
+        )
+        assert resp.status_code == 201, resp.text
         group_id = uuid.UUID(resp.json()["id"])
-        member_ids = {}
-        for name in names:
-            resp = client.post(
-                f"/api/groups/{group_id}/members", json={"name": name}
-            )
-            assert resp.status_code == 200
-            for m in resp.json()["members"]:
-                member_ids[m["name"]] = uuid.UUID(m["id"])
-        make.member_ids = member_ids
+        detail = client.get(f"/api/groups/{group_id}").json()
+        make.member_ids = {m["name"]: uuid.UUID(m["id"]) for m in detail["members"]}
         return group_id
 
     return make
