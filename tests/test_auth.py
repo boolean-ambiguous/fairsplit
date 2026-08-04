@@ -30,6 +30,23 @@ def test_signup_has_no_format_validation(client):
     assert resp.status_code == 202
 
 
+def test_signup_with_hostile_host_header_fails_closed(client, monkeypatch):
+    # A spoofed Host header (attacker-controlled, no reverse proxy in front
+    # of this app) must never end up embedded in a magic-link URL.
+    sent_links = []
+    monkeypatch.setattr(
+        "app.routes.auth.send_magic_link",
+        lambda email, link: sent_links.append(link),
+    )
+    resp = client.post(
+        "/api/auth/signup",
+        json={"email": "victim@example.com"},
+        headers={"Host": "attacker.tld"},
+    )
+    assert resp.status_code == 500
+    assert sent_links == []
+
+
 def test_verify_consumes_token_and_sets_session(client, engine):
     client.post("/api/auth/signup", json={"email": "ana@example.com"})
     token = latest_token(engine, "ana@example.com")

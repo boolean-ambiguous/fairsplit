@@ -63,7 +63,12 @@ Browse whatever origin uvicorn is bound to (**`http://127.0.0.1:8000`** by
 default). Magic links automatically point at that same origin — the backend
 detects it's serving the built SPA and uses the incoming request's own
 host/port, so this also works unmodified if you bind to a different port or
-a LAN IP.
+a loopback/private-network (LAN) IP. This auto-detection only trusts
+loopback addresses, private-network IPs (RFC1918, link-local), and the
+literal hostname `localhost`, since the request's `Host` header can't
+otherwise be verified — if you access the app via a LAN hostname instead
+(e.g. an mDNS/Bonjour name like `mylaptop.local`), set
+`FAIRSPLIT_FRONTEND_URL` explicitly (see path 3 below).
 
 ### 3. Real deployment
 
