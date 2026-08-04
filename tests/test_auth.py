@@ -2,6 +2,7 @@ import uuid
 
 from sqlmodel import Session, select
 
+from app import config
 from app.models import MagicLinkToken, Member, User
 
 
@@ -30,9 +31,12 @@ def test_signup_has_no_format_validation(client):
     assert resp.status_code == 202
 
 
-def test_signup_with_hostile_host_header_fails_closed(client, monkeypatch):
+def test_signup_with_hostile_host_header_fails_closed(client, monkeypatch, tmp_path):
     # A spoofed Host header (attacker-controlled, no reverse proxy in front
-    # of this app) must never end up embedded in a magic-link URL.
+    # of this app) must never end up embedded in a magic-link URL. Force the
+    # "serving the built SPA" branch regardless of whether frontend/dist
+    # actually exists on disk in this environment (e.g. CI never builds it).
+    monkeypatch.setattr(config, "FRONTEND_DIST", tmp_path)
     sent_links = []
     monkeypatch.setattr(
         "app.routes.auth.send_magic_link",
