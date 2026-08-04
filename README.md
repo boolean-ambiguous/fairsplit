@@ -28,23 +28,59 @@ history on every expense.
 
 ## Running it
 
+Install the backend once regardless of which path below you use:
+
 ```bash
-# backend
 pip install -e ".[dev]"
-
-# frontend (separate terminal)
-cd frontend && npm install && npm run build
-
-uvicorn app.main:app --reload
-# open http://127.0.0.1:8000/
 ```
 
-For frontend development with hot reload, run `npm run dev` in `frontend/`
-instead of `npm run build` — Vite's dev server proxies `/api` requests to the
-FastAPI backend (see `frontend/vite.config.ts`), so run `uvicorn app.main:app
---reload` alongside it.
+### 1. Local development (hot reload)
 
-Tests and lint (same as CI):
+Two servers, two terminals — the frontend proxies API calls to the backend
+(see `frontend/vite.config.ts`), so both need to be running:
+
+```bash
+# terminal 1
+uvicorn app.main:app --reload
+# terminal 2
+cd frontend && npm install && npm run dev
+```
+
+Browse **`http://localhost:5173`**. Edits to either side hot-reload. Magic
+links log pointing at `:5173` automatically — no configuration needed.
+
+### 2. Local production-style run (single server)
+
+Build the frontend once, then run only the backend — `app/main.py` mounts
+and serves `frontend/dist` itself, so there's no separate frontend process:
+
+```bash
+cd frontend && npm install && npm run build && cd ..
+uvicorn app.main:app --reload
+```
+
+Browse whatever origin uvicorn is bound to (**`http://127.0.0.1:8000`** by
+default). Magic links automatically point at that same origin — the backend
+detects it's serving the built SPA and uses the incoming request's own
+host/port, so this also works unmodified if you bind to a different port or
+a LAN IP.
+
+### 3. Real deployment
+
+Set `FAIRSPLIT_FRONTEND_URL` to the app's public URL:
+
+```bash
+FAIRSPLIT_FRONTEND_URL=https://fairsplit.example.com uvicorn app.main:app
+```
+
+This always takes priority over the auto-detection in path 2, which matters
+behind a reverse proxy or load balancer that doesn't forward the original
+`Host`/scheme faithfully, or if the frontend and backend ever end up served
+from different origins.
+
+### Tests and lint
+
+Same commands CI runs:
 
 ```bash
 pytest

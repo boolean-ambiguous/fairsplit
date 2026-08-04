@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlmodel import Session
 
-from app.config import FRONTEND_BASE_URL
+from app.config import resolve_frontend_base_url
 from app.database import get_session
 from app.models import User
 from app.schemas import NameRequest, SignupRequest, UpdateMeRequest, UserOut, VerifyRequest
@@ -24,12 +24,13 @@ def _user_out(user: User) -> UserOut:
 
 
 @router.post("/signup", status_code=202)
-def signup(body: SignupRequest, session: Session = Depends(get_session)):
+def signup(body: SignupRequest, request: Request, session: Session = Depends(get_session)):
     try:
         user, token = start_signup(session, body.email)
     except AuthError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    link = f"{FRONTEND_BASE_URL}/verify?token={token.token}"
+    base_url = resolve_frontend_base_url(str(request.base_url))
+    link = f"{base_url}/verify?token={token.token}"
     send_magic_link(user.email, link)
     return {"message": "Check your email for a magic link."}
 

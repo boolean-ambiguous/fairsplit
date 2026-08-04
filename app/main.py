@@ -1,14 +1,11 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.config import FRONTEND_DIST
 from app.database import init_db
-
-BASE_DIR = Path(__file__).parent
-FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
