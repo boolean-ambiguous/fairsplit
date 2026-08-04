@@ -1,12 +1,12 @@
-import { Box, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material'
+import { Box, MenuItem, Select, Typography, useTheme } from '@mui/material'
+import type { SelectChangeEvent } from '@mui/material'
 import type { DashboardRange, FlowPoint } from '../api/types'
 import { buildChartData } from '../chartData'
 
 const RANGE_LABELS: Record<DashboardRange, string> = {
-  '1d': '1 day',
-  '5d': '5 days',
   '1mo': '1 month',
   '12mo': '12 months',
+  all: 'All time',
 }
 
 interface Props {
@@ -35,18 +35,18 @@ export default function FlowChart({ flow, range, onRangeChange }: Props) {
         <Typography variant="caption" color="text.secondary">
           Balance over time
         </Typography>
-        <ToggleButtonGroup
+        <Select
           size="small"
-          exclusive
           value={range}
-          onChange={(_, value: DashboardRange | null) => value && onRangeChange(value)}
+          onChange={(e: SelectChangeEvent) => onRangeChange(e.target.value as DashboardRange)}
+          sx={{ minWidth: 120, fontSize: 13 }}
         >
           {(Object.keys(RANGE_LABELS) as DashboardRange[]).map((key) => (
-            <ToggleButton key={key} value={key}>
+            <MenuItem key={key} value={key}>
               {RANGE_LABELS[key]}
-            </ToggleButton>
+            </MenuItem>
           ))}
-        </ToggleButtonGroup>
+        </Select>
       </Box>
       <svg viewBox="0 0 600 200" style={{ width: '100%', height: 'auto', display: 'block' }} preserveAspectRatio="none">
         <line x1={0} y1={baseline} x2={600} y2={baseline} stroke={theme.palette.divider} strokeWidth={1} />

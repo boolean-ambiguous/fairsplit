@@ -5,7 +5,7 @@ from app.database import get_session
 from app.models import Group, Member, User
 from app.schemas import DashboardGroupOut, DashboardOut, FlowPointOut, OpenPositionOut
 from app.services.activity import (
-    RANGE_DAYS,
+    RANGE_KEYS,
     bucket_range,
     find_my_memberships,
     group_summary_order,
@@ -23,7 +23,7 @@ def get_dashboard(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    if range not in RANGE_DAYS:
+    if range not in RANGE_KEYS:
         raise HTTPException(status_code=422, detail=f"Unknown range: {range}")
 
     matching = find_my_memberships(session, current_user.id)

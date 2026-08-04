@@ -167,17 +167,35 @@ def test_owed_owe_snapshots_last_point_matches_current_aggregate(client, engine,
 def test_bucket_range_forward_fills_from_last_snapshot():
     today = date.today()
     snapshots = [(today - timedelta(days=3), 500, 200)]
-    bucketed = bucket_range(snapshots, "5d")
-    assert len(bucketed) == 5
+    bucketed = bucket_range(snapshots, "1mo")
+    assert len(bucketed) == 30
     days = [d for d, _, _ in bucketed]
-    assert days == [today - timedelta(days=i) for i in range(4, -1, -1)]
-    # Two days before the snapshot: no activity yet.
-    assert bucketed[0] == (today - timedelta(days=4), 0, 0)
+    assert days == [today - timedelta(days=i) for i in range(29, -1, -1)]
+    # Before the snapshot: no activity yet.
+    assert bucketed[0] == (today - timedelta(days=29), 0, 0)
     # From the snapshot day onward, the snapshot's totals carry forward.
-    assert bucketed[1] == (today - timedelta(days=3), 500, 200)
+    assert bucketed[26] == (today - timedelta(days=3), 500, 200)
     assert bucketed[-1] == (today, 500, 200)
 
 
 def test_bucket_range_unknown_key_raises():
     with pytest.raises(KeyError):
         bucket_range([], "bogus")
+
+
+def test_bucket_range_all_starts_at_earliest_snapshot():
+    today = date.today()
+    earliest = today - timedelta(days=40)
+    snapshots = [(earliest, 500, 200), (today - timedelta(days=3), 700, 100)]
+    bucketed = bucket_range(snapshots, "all")
+    # The window starts exactly on the earliest snapshot's own date, and
+    # that snapshot applies immediately (not a day later).
+    assert bucketed[0] == (earliest, 500, 200)
+    assert len(bucketed) == (today - earliest).days + 1
+    assert bucketed[-1] == (today, 700, 100)
+
+
+def test_bucket_range_all_with_no_snapshots_is_a_single_point():
+    today = date.today()
+    bucketed = bucket_range([], "all")
+    assert bucketed == [(today, 0, 0)]

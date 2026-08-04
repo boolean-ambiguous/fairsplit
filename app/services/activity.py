@@ -6,7 +6,8 @@ from sqlmodel import Session, select
 
 from app.models import Expense, ExpenseShare, Group, Member, Settlement
 
-RANGE_DAYS = {"1d": 1, "5d": 5, "1mo": 30, "12mo": 365}
+FIXED_RANGE_DAYS = {"1mo": 30, "12mo": 365}
+RANGE_KEYS = {*FIXED_RANGE_DAYS, "all"}
 
 
 def find_my_memberships(session: Session, user_id: uuid.UUID) -> dict[uuid.UUID, uuid.UUID]:
@@ -130,18 +131,23 @@ def bucket_range(
     snapshots: list[tuple[date, int, int]], range_key: str
 ) -> list[tuple[date, int, int]]:
     """One point per calendar day in the trailing `range_key` window ending
-    today (UTC). Each day carries the most recent snapshot at or before it
+    today (UTC) — `"1mo"`/`"12mo"` use a fixed day count, `"all"` instead
+    starts at the earliest snapshot (or today, if there are none yet).
+    Each day carries the most recent snapshot at or before it
     (forward-filled — owed/owe are cumulative state, not daily deltas, so a
     quiet day repeats yesterday's totals rather than resetting to zero);
     days before any activity read as (0, 0)."""
-    days = RANGE_DAYS[range_key]
     today = datetime.now(timezone.utc).date()
-    start = today - timedelta(days=days - 1)
+    if range_key == "all":
+        start = snapshots[0][0] if snapshots else today
+    else:
+        start = today - timedelta(days=FIXED_RANGE_DAYS[range_key] - 1)
+    total_days = (today - start).days + 1
 
     result: list[tuple[date, int, int]] = []
     idx = 0
     last_owed, last_owe = 0, 0
-    for i in range(days):
+    for i in range(total_days):
         day = start + timedelta(days=i)
         while idx < len(snapshots) and snapshots[idx][0] <= day:
             last_owed, last_owe = snapshots[idx][1], snapshots[idx][2]

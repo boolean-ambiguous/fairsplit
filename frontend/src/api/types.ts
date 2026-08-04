@@ -147,7 +147,7 @@ export interface GroupDetail {
 
 // ---- Dashboard ----
 
-export type DashboardRange = '1d' | '5d' | '1mo' | '12mo'
+export type DashboardRange = '1mo' | '12mo' | 'all'
 
 export interface DashboardGroup {
   id: string
