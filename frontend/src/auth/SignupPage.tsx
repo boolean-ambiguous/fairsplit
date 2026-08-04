@@ -32,7 +32,7 @@ export default function SignupPage() {
         FairSplit
       </Typography>
       <Typography variant="h4" sx={{ fontWeight: 500, letterSpacing: '-0.02em', mb: 1.5 }}>
-        Split bills, keep the friendships.
+        Split bills, not the friendships.
       </Typography>
       <Typography color="text.secondary" sx={{ mb: 3 }}>
         Enter your email and we'll send a magic link so you can get started. No password to
