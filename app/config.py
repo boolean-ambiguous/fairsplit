@@ -36,7 +36,7 @@ def _is_trusted_local_host(hostname: str | None) -> bool:
     return addr.is_private
 
 
-def resolve_frontend_base_url(request_base_url: str) -> str:
+def resolve_frontend_base_url(request_base_url: str, request_origin: str | None = None) -> str:
     """Where magic-link emails should point.
 
     Priority: an explicit FAIRSPLIT_FRONTEND_URL env var always wins (real
@@ -51,7 +51,12 @@ def resolve_frontend_base_url(request_base_url: str) -> str:
     magic-link URL would let an attacker redirect a victim's login token to a
     domain of the attacker's choosing — see UntrustedRequestOriginError.
     Otherwise (frontend/dist missing — dev split mode, `npm run dev` running
-    on its own port) fall back to Vite's default dev port.
+    on its own port, e.g. 5173/5174/... depending on what's free) the backend
+    and frontend are on different origins, so request_base_url is useless
+    here — it's the *backend's* own address. Instead use the browser-supplied
+    Origin header, which names the actual frontend dev-server port, subject
+    to the same loopback/private/localhost trust check. Fall back to Vite's
+    default dev port only if that header is missing or untrusted.
     """
     if _FRONTEND_URL_OVERRIDE:
         return _FRONTEND_URL_OVERRIDE.rstrip("/")
@@ -64,4 +69,8 @@ def resolve_frontend_base_url(request_base_url: str) -> str:
                 f"real public URL."
             )
         return request_base_url.rstrip("/")
+    if request_origin:
+        hostname = urlsplit(request_origin).hostname
+        if _is_trusted_local_host(hostname):
+            return request_origin.rstrip("/")
     return _DEV_FRONTEND_URL

@@ -57,3 +57,21 @@ def test_dist_missing_falls_back_to_dev_port(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "_FRONTEND_URL_OVERRIDE", None)
     monkeypatch.setattr(config, "FRONTEND_DIST", tmp_path / "does-not-exist")
     assert config.resolve_frontend_base_url("http://127.0.0.1:8000/") == "http://localhost:5173"
+
+
+def test_dist_missing_uses_trusted_origin_header(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "_FRONTEND_URL_OVERRIDE", None)
+    monkeypatch.setattr(config, "FRONTEND_DIST", tmp_path / "does-not-exist")
+    assert (
+        config.resolve_frontend_base_url("http://127.0.0.1:8000/", "http://localhost:5174")
+        == "http://localhost:5174"
+    )
+
+
+def test_dist_missing_ignores_untrusted_origin_header(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "_FRONTEND_URL_OVERRIDE", None)
+    monkeypatch.setattr(config, "FRONTEND_DIST", tmp_path / "does-not-exist")
+    assert (
+        config.resolve_frontend_base_url("http://127.0.0.1:8000/", "http://attacker.tld")
+        == "http://localhost:5173"
+    )
