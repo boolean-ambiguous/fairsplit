@@ -1,8 +1,10 @@
 import uuid
 
+from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app import config
+from app.main import app
 from app.models import MagicLinkToken, Member, User
 
 
@@ -63,6 +65,25 @@ def test_verify_consumes_token_and_sets_session(client, engine):
     me = client.get("/api/auth/me")
     assert me.status_code == 200
     assert me.json()["email"] == "ana@example.com"
+
+
+def test_verify_over_http_sets_non_secure_cookie(client, engine):
+    client.post("/api/auth/signup", json={"email": "ana@example.com"})
+    token = latest_token(engine, "ana@example.com")
+    resp = client.post("/api/auth/verify", json={"token": token.token})
+    set_cookie = resp.headers.get("set-cookie", "")
+    assert "fairsplit_session=" in set_cookie
+    assert "secure" not in set_cookie.lower()
+
+
+def test_verify_over_https_sets_secure_cookie(engine):
+    with TestClient(app, base_url="https://localhost") as https_client:
+        https_client.post("/api/auth/signup", json={"email": "ana@example.com"})
+        token = latest_token(engine, "ana@example.com")
+        resp = https_client.post("/api/auth/verify", json={"token": token.token})
+        set_cookie = resp.headers.get("set-cookie", "")
+        assert "fairsplit_session=" in set_cookie
+        assert "secure" in set_cookie.lower()
 
 
 def test_verify_rejects_reused_token(client, engine):

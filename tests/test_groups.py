@@ -53,6 +53,12 @@ def test_unsupported_currency_rejected(client, signed_in):
     assert resp.status_code == 422
 
 
+def test_oversized_group_name_rejected(client, signed_in):
+    signed_in("Ana")
+    resp = client.post("/api/groups", json={"name": "x" * 1000})
+    assert resp.status_code == 422
+
+
 def test_invited_member_added(client, group_with_members):
     group_id = group_with_members(["Ana"])
     resp = client.post(f"/api/groups/{group_id}/members", json={"name": "Ben"})

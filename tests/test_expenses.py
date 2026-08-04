@@ -46,6 +46,19 @@ def test_non_positive_amount_rejected(client, group_with_members, member_ids):
     assert resp.status_code == 422
 
 
+def test_oversized_amount_rejected_cleanly(client, group_with_members, member_ids):
+    # A very long digit string used to trip an uncaught decimal.InvalidOperation
+    # in parse_amount() (context precision overflow on .quantize()), surfacing
+    # as an unhandled 500. It must now be rejected as a clean validation error.
+    group_id = group_with_members(["Ana", "Ben"])
+    ana, ben = member_ids(group_id, ["Ana", "Ben"])
+    resp = client.post(
+        f"/api/groups/{group_id}/expenses",
+        json=expense_body(ana, [ana, ben], amount="9" * 50),
+    )
+    assert resp.status_code == 422
+
+
 def test_future_date_rejected(client, group_with_members, member_ids):
     group_id = group_with_members(["Ana", "Ben"])
     ana, ben = member_ids(group_id, ["Ana", "Ben"])
