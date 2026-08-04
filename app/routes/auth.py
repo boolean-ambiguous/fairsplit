@@ -34,7 +34,9 @@ def signup(body: SignupRequest, request: Request, session: Session = Depends(get
     except AuthError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     try:
-        base_url = resolve_frontend_base_url(str(request.base_url))
+        base_url = resolve_frontend_base_url(
+            str(request.base_url), request.headers.get("origin")
+        )
     except UntrustedRequestOriginError:
         logger.error(
             "Rejected signup: request Host %r is not loopback/private and "
