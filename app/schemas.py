@@ -1,9 +1,18 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD"]
+
+# Caps on free-text input fields, to keep a single request from stuffing
+# arbitrarily large strings into the database.
+NAME_MAX_LEN = 100
+EMAIL_MAX_LEN = 254  # RFC 5321 maximum mailbox length
+TOKEN_MAX_LEN = 512
+NOTES_MAX_LEN = 2000
+DESCRIPTION_MAX_LEN = 200
+AMOUNT_MAX_LEN = 20  # e.g. "-9999999999999999.99"
 
 
 # ---- Auth ----
@@ -17,19 +26,19 @@ class UserOut(BaseModel):
 
 
 class SignupRequest(BaseModel):
-    email: str
+    email: str = Field(max_length=EMAIL_MAX_LEN)
 
 
 class VerifyRequest(BaseModel):
-    token: str
+    token: str = Field(max_length=TOKEN_MAX_LEN)
 
 
 class NameRequest(BaseModel):
-    name: str
+    name: str = Field(max_length=NAME_MAX_LEN)
 
 
 class UpdateMeRequest(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=NAME_MAX_LEN)
     theme: str | None = None
 
 
@@ -45,30 +54,30 @@ class MemberOut(BaseModel):
 
 
 class InviteMember(BaseModel):
-    name: str
-    email: str | None = None
+    name: str = Field(max_length=NAME_MAX_LEN)
+    email: str | None = Field(default=None, max_length=EMAIL_MAX_LEN)
 
 
 class GroupCreate(BaseModel):
-    name: str
+    name: str = Field(max_length=NAME_MAX_LEN)
     currency: str = "USD"
     photo_data_url: str | None = None
     invites: list[InviteMember] = []
 
 
 class GroupUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=NAME_MAX_LEN)
     currency: str | None = None
     photo_data_url: str | None = None
 
 
 class MemberCreate(BaseModel):
-    name: str
-    email: str | None = None
+    name: str = Field(max_length=NAME_MAX_LEN)
+    email: str | None = Field(default=None, max_length=EMAIL_MAX_LEN)
 
 
 class MemberUpdate(BaseModel):
-    name: str
+    name: str = Field(max_length=NAME_MAX_LEN)
 
 
 class GroupOut(BaseModel):
@@ -116,14 +125,14 @@ class ExpenseOut(BaseModel):
 
 
 class ExpenseCreate(BaseModel):
-    description: str
-    amount: str
+    description: str = Field(max_length=DESCRIPTION_MAX_LEN)
+    amount: str = Field(max_length=AMOUNT_MAX_LEN)
     date: date
     payer_id: uuid.UUID
     participant_ids: list[uuid.UUID]
     split_mode: str = "even"
     exact_shares: dict[uuid.UUID, str] | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=NOTES_MAX_LEN)
     receipt_data_url: str | None = None
 
 
@@ -157,7 +166,7 @@ class SettlementRecordOut(BaseModel):
 class SettlementCreate(BaseModel):
     from_member: uuid.UUID
     to_member: uuid.UUID
-    amount: str
+    amount: str = Field(max_length=AMOUNT_MAX_LEN)
 
 
 class GroupDetailOut(BaseModel):

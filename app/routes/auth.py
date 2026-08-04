@@ -54,12 +54,17 @@ def signup(body: SignupRequest, request: Request, session: Session = Depends(get
 
 
 @router.post("/verify", response_model=UserOut)
-def verify(body: VerifyRequest, response: Response, session: Session = Depends(get_session)):
+def verify(
+    body: VerifyRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+):
     try:
         user = consume_magic_link_token(session, body.token)
     except AuthError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    create_login_session(session, user, response)
+    create_login_session(session, user, response, secure=request.url.scheme == "https")
     return _user_out(user)
 
 

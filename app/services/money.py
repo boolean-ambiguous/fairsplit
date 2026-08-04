@@ -9,10 +9,10 @@ def parse_amount(raw: str) -> int:
     """Parse a decimal currency string into positive integer cents."""
     try:
         value = Decimal(raw.strip())
+        if value != value.quantize(Decimal("0.01")):
+            raise MoneyError("Amounts cannot have more than two decimal places")
     except InvalidOperation:
         raise MoneyError(f"Not a valid amount: {raw!r}")
-    if value != value.quantize(Decimal("0.01")):
-        raise MoneyError("Amounts cannot have more than two decimal places")
     cents = int(value * 100)
     if cents <= 0:
         raise MoneyError("Amount must be positive")
@@ -25,10 +25,10 @@ def parse_share(raw: str) -> int:
         return 0
     try:
         value = Decimal(raw.strip())
+        if value != value.quantize(Decimal("0.01")):
+            raise MoneyError("Amounts cannot have more than two decimal places")
     except InvalidOperation:
         raise MoneyError(f"Not a valid amount: {raw!r}")
-    if value != value.quantize(Decimal("0.01")):
-        raise MoneyError("Amounts cannot have more than two decimal places")
     cents = int(value * 100)
     if cents < 0:
         raise MoneyError("Shares cannot be negative")

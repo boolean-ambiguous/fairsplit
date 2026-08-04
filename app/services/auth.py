@@ -77,7 +77,9 @@ def _link_invited_memberships(session: Session, user: User) -> None:
             session.add(member)
 
 
-def create_login_session(session: Session, user: User, response: Response) -> LoginSession:
+def create_login_session(
+    session: Session, user: User, response: Response, *, secure: bool
+) -> LoginSession:
     login_session = LoginSession(
         user_id=user.id,
         token=secrets.token_urlsafe(32),
@@ -91,6 +93,7 @@ def create_login_session(session: Session, user: User, response: Response) -> Lo
         login_session.token,
         httponly=True,
         samesite="lax",
+        secure=secure,
         max_age=int(SESSION_TTL.total_seconds()),
         path="/",
     )
