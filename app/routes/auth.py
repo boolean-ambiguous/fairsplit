@@ -10,6 +10,7 @@ from app.schemas import NameRequest, SignupRequest, UpdateMeRequest, UserOut, Ve
 from app.services.auth import (
     SESSION_COOKIE,
     AuthError,
+    RateLimitedError,
     clear_login_session,
     consume_magic_link_token,
     create_login_session,
@@ -17,6 +18,7 @@ from app.services.auth import (
     start_signup,
 )
 from app.services.email import send_magic_link
+from app.services.rate_limit import signup_ip_limiter
 
 logger = logging.getLogger("fairsplit.auth")
 
@@ -29,8 +31,13 @@ def _user_out(user: User) -> UserOut:
 
 @router.post("/signup", status_code=202)
 def signup(body: SignupRequest, request: Request, session: Session = Depends(get_session)):
+    client_ip = request.client.host if request.client else "unknown"
+    if not signup_ip_limiter.allow(client_ip):
+        raise HTTPException(status_code=429, detail="Too many attempts, please wait and try again.")
     try:
         user, token = start_signup(session, body.email)
+    except RateLimitedError as exc:
+        raise HTTPException(status_code=429, detail=str(exc))
     except AuthError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     try:

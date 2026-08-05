@@ -144,6 +144,22 @@ def test_logout_clears_session(client, signed_in):
     assert client.get("/api/auth/me").status_code == 401
 
 
+def test_repeated_signup_for_same_email_is_rate_limited(client):
+    for _ in range(3):
+        resp = client.post("/api/auth/signup", json={"email": "ana@example.com"})
+        assert resp.status_code == 202
+    resp = client.post("/api/auth/signup", json={"email": "ana@example.com"})
+    assert resp.status_code == 429
+
+
+def test_repeated_signup_from_same_ip_is_rate_limited(client):
+    for i in range(10):
+        resp = client.post("/api/auth/signup", json={"email": f"user{i}@example.com"})
+        assert resp.status_code == 202
+    resp = client.post("/api/auth/signup", json={"email": "one-more@example.com"})
+    assert resp.status_code == 429
+
+
 def test_invited_placeholder_links_to_account_on_verify(client, engine, signed_in):
     signed_in("Ana", email="ana@example.com")
     resp = client.post(

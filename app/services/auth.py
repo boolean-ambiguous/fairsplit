@@ -10,6 +10,8 @@ from app.models import LoginSession, MagicLinkToken, Member, User, utcnow
 SESSION_COOKIE = "fairsplit_session"
 MAGIC_LINK_TTL = timedelta(minutes=30)
 SESSION_TTL = timedelta(days=30)
+MAGIC_LINK_RATE_LIMIT = 3
+MAGIC_LINK_RATE_WINDOW = timedelta(minutes=15)
 
 
 def _aware(dt: datetime) -> datetime:
@@ -19,6 +21,10 @@ def _aware(dt: datetime) -> datetime:
 
 
 class AuthError(ValueError):
+    pass
+
+
+class RateLimitedError(AuthError):
     pass
 
 
@@ -33,6 +39,13 @@ def start_signup(session: Session, email: str) -> tuple[User, MagicLinkToken]:
         session.add(user)
         session.commit()
         session.refresh(user)
+    recent_tokens = session.exec(
+        select(MagicLinkToken).where(MagicLinkToken.user_id == user.id)
+    ).all()
+    window_start = utcnow() - MAGIC_LINK_RATE_WINDOW
+    recent_count = sum(1 for t in recent_tokens if _aware(t.created_at) > window_start)
+    if recent_count >= MAGIC_LINK_RATE_LIMIT:
+        raise RateLimitedError("Too many sign-in attempts. Please wait a few minutes and try again.")
     token = MagicLinkToken(
         user_id=user.id,
         token=secrets.token_urlsafe(32),

@@ -8,6 +8,27 @@ from sqlmodel.pool import StaticPool
 import app.database as database
 from app.main import app
 from app.models import MagicLinkToken
+from app.services.rate_limit import signup_ip_limiter
+
+
+@pytest.fixture(autouse=True)
+def _stub_email(monkeypatch):
+    """Every test goes through this — signup now sends real SMTP mail, and
+    tests shouldn't depend on a mail server being reachable. Tests that care
+    about what was "sent" (e.g. hostile-Host-header rejection) monkeypatch
+    the same target themselves, which simply overrides this stub for that
+    test."""
+    monkeypatch.setattr("app.routes.auth.send_magic_link", lambda email, link: None)
+
+
+@pytest.fixture(autouse=True)
+def _reset_signup_ip_limiter():
+    # The per-IP signup limiter (app/services/rate_limit.py) is a
+    # module-level singleton so it works correctly in the single-process app
+    # — but that means it's shared across every test's TestClient (which all
+    # report the same client host), so it must be reset per test to avoid
+    # unrelated tests tripping each other's limit.
+    signup_ip_limiter._hits.clear()
 
 
 @pytest.fixture
