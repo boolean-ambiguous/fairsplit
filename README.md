@@ -83,6 +83,26 @@ behind a reverse proxy or load balancer that doesn't forward the original
 `Host`/scheme faithfully, or if the frontend and backend ever end up served
 from different origins.
 
+### 4. Hosting on a custom domain (Render)
+
+FairSplit runs as a single process — `uvicorn` serving the API and the built
+SPA together — so it fits a single Render web service, no Docker required:
+
+- Build command: `cd frontend && npm install && npm run build && cd .. && pip install -e .`
+- Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'`
+  (`--proxy-headers` matters: Render terminates TLS at its edge and forwards
+  `X-Forwarded-Proto`/`X-Forwarded-For`; without it uvicorn sees plain `http`,
+  which breaks the `secure` cookie flag in `app/routes/auth.py` and reports
+  every request as coming from Render's internal proxy IP, which breaks the
+  per-IP signup rate limit above.)
+- Add a persistent disk (Starter plan or above) mounted at `/var/data`, and
+  set `FAIRSPLIT_DB=sqlite:////var/data/fairsplit.db` — the default filesystem
+  is ephemeral and would wipe the SQLite file on every deploy.
+- Set `FAIRSPLIT_FRONTEND_URL=https://your-domain.com` (see path 3 above).
+- Add the custom domain in the Render dashboard, then add the `CNAME`
+  (or `ANAME`/`ALIAS` for an apex domain) it gives you at your DNS provider.
+  Render auto-provisions the TLS certificate once DNS resolves.
+
 ### Tests and lint
 
 Same commands CI runs:
@@ -94,10 +114,35 @@ cd frontend && npm run lint && npm run build
 
 ### Email delivery
 
-No email provider is configured. Magic links are logged to the backend's
-console (`app/services/email.py`) instead of being sent — copy the link from
-there when testing signup locally. Swap that module's body for a real
-provider (Postmark, SES, Resend, ...) to send actual email.
+Magic links are sent over SMTP (`app/services/email.py`, using Python's
+`smtplib` — no extra dependency). By default it points at a local
+[Mailpit](https://mailpit.axllent.org/) instance (`localhost:1025`, no auth),
+so you can see signup emails without a real mail server:
+
+```bash
+docker run -d --name mailpit -p 8025:8025 -p 1025:1025 axllent/mailpit
+# or: brew install mailpit && mailpit
+```
+
+Then sign up as usual and check `http://localhost:8025` for the email.
+
+For production, point at a real provider's SMTP relay (e.g.
+[Resend](https://resend.com), after verifying your sending domain) via env
+vars — none of these have defaults that reach outside localhost, so nothing
+is sent anywhere unexpected in dev:
+
+```bash
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_USER=resend
+SMTP_PASSWORD=<your Resend API key>
+SMTP_USE_TLS=true
+EMAIL_FROM="FairSplit <noreply@your-domain.com>"
+```
+
+`/api/auth/signup` is also rate-limited (3 requests per email, 10 per IP,
+per 15 minutes — see `app/services/auth.py` and `app/services/rate_limit.py`)
+since it now triggers real outbound email.
 
 ## Stack
 
