@@ -28,9 +28,12 @@ history on every expense.
 
 ## Running it
 
-Install the backend once regardless of which path below you use:
+Install the backend once regardless of which path below you use (create a
+virtualenv first so dependencies stay isolated from your system Python):
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
@@ -48,6 +51,24 @@ cd frontend && npm install && npm run dev
 
 Browse **`http://localhost:5173`**. Edits to either side hot-reload. Magic
 links log pointing at `:5173` automatically — no configuration needed.
+
+Alternatively, run everything — backend, frontend, and a local
+[Mailpit](https://mailpit.axllent.org/) instance for catching magic-link
+emails (see "Email delivery" below) — with one command via the included
+`Procfile` and [Overmind](https://github.com/DarthSim/overmind) (a tmux-based
+process manager; Mailpit itself still needs to be installed separately — see
+"Email delivery"):
+
+```bash
+brew install tmux overmind
+cd frontend && npm install && cd ..
+overmind start
+```
+
+Each process (`web`, `frontend`, `mail`) gets its own tmux window with its
+own unpolluted log stream — switch between them with `ctrl-b` then a window
+number, or attach to just one with `overmind connect web`. A single Ctrl+C
+(or `overmind stop` from another terminal) stops all of them.
 
 ### 2. Local production-style run (single server)
 

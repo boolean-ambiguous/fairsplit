@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD"]
+CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD", "CHF"]
 
 # Caps on free-text input fields, to keep a single request from stuffing
 # arbitrarily large strings into the database.

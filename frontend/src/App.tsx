@@ -9,6 +9,7 @@ import VerifyPage from './auth/VerifyPage'
 import NamePage from './auth/NamePage'
 import Dashboard from './pages/Dashboard'
 import GroupDetail from './pages/GroupDetail'
+import Landing from './pages/Landing'
 
 function Splash() {
   return (
@@ -41,6 +42,14 @@ function NamePageGate() {
   return <NamePage />
 }
 
+function RootRoute() {
+  const { user, loading } = useAuth()
+  if (loading) return <Splash />
+  if (!user) return <Landing />
+  if (!user.name) return <Navigate to="/name" replace />
+  return <Dashboard />
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -54,14 +63,7 @@ function AppRoutes() {
       />
       <Route path="/verify" element={<VerifyPage />} />
       <Route path="/name" element={<NamePageGate />} />
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <Dashboard />
-          </RequireAuth>
-        }
-      />
+      <Route path="/" element={<RootRoute />} />
       <Route
         path="/groups/:groupId"
         element={
