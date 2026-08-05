@@ -7,3 +7,4 @@ fairsplit.db
 frontend/node_modules/
 frontend/dist/
 frontend/node_modules/.tmp/
+.overmind.sock
