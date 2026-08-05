@@ -48,8 +48,7 @@ export default function VerifyPage() {
             {email ? `We sent a link to ${email}` : 'Check your email for a magic link'}
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 3 }}>
-            Click it to confirm the email is really yours. (No email provider is configured in
-            this environment — check the server's console output for the link instead.)
+            Click it to confirm the email is really yours.
           </Typography>
           {status === 'error' && (
             <Typography color="error" sx={{ mb: 2 }}>
