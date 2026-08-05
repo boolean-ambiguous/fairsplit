@@ -28,9 +28,12 @@ history on every expense.
 
 ## Running it
 
-Install the backend once regardless of which path below you use:
+Install the backend once regardless of which path below you use (create a
+virtualenv first so dependencies stay isolated from your system Python):
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
