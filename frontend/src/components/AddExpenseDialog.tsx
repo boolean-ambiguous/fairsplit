@@ -204,7 +204,7 @@ export default function AddExpenseDialog({ open, group, myMemberId, editing, onC
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                sx={{ flex: 2 }}
+                sx={{ flex: 1.4 }}
               />
               <TextField
                 label="Date"
@@ -212,7 +212,7 @@ export default function AddExpenseDialog({ open, group, myMemberId, editing, onC
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: today() } }}
-                sx={{ flex: 1 }}
+                sx={{ flex: 1, minWidth: 132 }}
               />
             </Stack>
             <TextField select label="Paid by" value={paidBy} onChange={(e) => setPaidBy(e.target.value)} fullWidth>

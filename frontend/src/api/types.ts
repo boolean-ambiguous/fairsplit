@@ -1,4 +1,4 @@
-export const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const
+export const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'CHF'] as const
 export type Currency = (typeof CURRENCIES)[number]
 
 export const CURRENCY_SYMBOLS: Record<Currency, string> = {
@@ -7,6 +7,7 @@ export const CURRENCY_SYMBOLS: Record<Currency, string> = {
   GBP: '£',
   CAD: '$',
   AUD: '$',
+  CHF: 'CHF',
 }
 
 // ---- Auth ----
