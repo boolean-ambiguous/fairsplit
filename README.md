@@ -98,15 +98,22 @@ SPA together — so it fits a single Render web service, no Docker required:
 - Render's free web-service plan has no persistent disk — its filesystem is
   wiped on every deploy/restart, which local SQLite can't survive. Use a free
   hosted Postgres instead: create a [Supabase](https://supabase.com) project,
-  copy the connection string from Project Settings → Database → Connection
-  string (URI form, direct connection — not the pooler, since this app is a
-  single long-running process, not serverless), and set it as `FAIRSPLIT_DB`
-  as-is (works whether it starts with `postgres://` or `postgresql://` —
-  `app/database.py` routes it through the `psycopg` driver automatically).
-  Supabase requires TLS; the driver negotiates it automatically, no extra
-  config needed. (If you'd rather keep local SQLite and pay for a Render
-  disk instead, mount one at `/var/data` and set
-  `FAIRSPLIT_DB=sqlite:////var/data/fairsplit.db`.)
+  then copy the **Session pooler** connection string (Project Settings →
+  Database → Connection string, or the "Connect" button — look for "Session
+  pooler", not "Direct connection" or "Transaction pooler"). Supabase's direct
+  connection hostname is IPv6-only, and Render's network has no outbound IPv6
+  route, so it fails with "Network is unreachable"; the session pooler
+  (Supavisor) is IPv4-reachable and behaves like a direct connection — unlike
+  the transaction pooler, which multiplexes connections per-transaction and
+  can break SQLAlchemy usage patterns like prepared statements — which suits
+  this app's single long-running process. The pooler connection string's
+  username is `postgres.<project-ref>` rather than plain `postgres`. Set the
+  whole string as `FAIRSPLIT_DB` as-is (works whether it starts with
+  `postgres://` or `postgresql://` — `app/database.py` routes it through the
+  `psycopg` driver automatically). Supabase requires TLS; the driver
+  negotiates it automatically, no extra config needed. (If you'd rather keep
+  local SQLite and pay for a Render disk instead, mount one at `/var/data`
+  and set `FAIRSPLIT_DB=sqlite:////var/data/fairsplit.db`.)
 - Set `FAIRSPLIT_FRONTEND_URL=https://your-domain.com` (see path 3 above).
 - Add the custom domain in the Render dashboard, then add the `CNAME`
   (or `ANAME`/`ALIAS` for an apex domain) it gives you at your DNS provider.
