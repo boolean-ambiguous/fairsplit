@@ -29,8 +29,14 @@ def send_magic_link(email: str, link: str) -> None:
         "This link expires in 30 minutes."
     )
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
-        if SMTP_USE_TLS:
+    # Port 465 is implicit TLS (encrypted from the first byte) and needs
+    # SMTP_SSL; STARTTLS (port 587, or plain/unencrypted for local Mailpit)
+    # negotiates encryption after connecting in plaintext. Mixing the two up
+    # (e.g. STARTTLS against port 465) fails before the server ever sees a
+    # real request.
+    smtp_cls = smtplib.SMTP_SSL if SMTP_PORT == 465 else smtplib.SMTP
+    with smtp_cls(SMTP_HOST, SMTP_PORT) as smtp:
+        if SMTP_USE_TLS and SMTP_PORT != 465:
             smtp.starttls()
         if SMTP_USER and SMTP_PASSWORD:
             smtp.login(SMTP_USER, SMTP_PASSWORD)
