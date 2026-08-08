@@ -96,10 +96,26 @@ def require_membership(session: Session, group_id: uuid.UUID, user: User) -> Mem
     return member
 
 
+def require_owner(group: Group, user: User) -> None:
+    if group.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Only the group owner can do this")
+
+
 def _find_linked_user(session: Session, email: str | None) -> User | None:
     if not email:
         return None
     return session.exec(select(User).where(User.email == email.strip().lower())).first()
+
+
+def _resolve_linked_user(
+    session: Session, user_id: uuid.UUID | None, email: str | None
+) -> User | None:
+    if user_id is not None:
+        linked = session.get(User, user_id)
+        if linked is None:
+            raise HTTPException(status_code=422, detail="Selected user not found")
+        return linked
+    return _find_linked_user(session, email)
 
 
 def _history_entries(session: Session, expense_id: uuid.UUID) -> list[ExpenseHistoryEntryOut]:
@@ -161,6 +177,7 @@ def _group_detail(session: Session, group: Group, current_user: User) -> GroupDe
         currency=group.currency,
         photo_data_url=group.photo_data_url,
         created_at=group.created_at,
+        is_owner=group.owner_id == current_user.id,
         members=[
             MemberOut(id=m.id, name=m.name, email=m.email, user_id=m.user_id, created_at=m.created_at)
             for m in members
@@ -214,6 +231,7 @@ def list_groups(
                 created_at=group.created_at,
                 member_count=len(group_members(session, group.id)),
                 balance_cents=balance,
+                is_owner=group.owner_id == current_user.id,
             )
         )
     return out
@@ -233,7 +251,12 @@ def create_group(
     if not current_user.name:
         raise HTTPException(status_code=422, detail="Set your name before creating a group")
 
-    group = Group(name=name, currency=body.currency, photo_data_url=_validated_photo(body.photo_data_url))
+    group = Group(
+        name=name,
+        currency=body.currency,
+        photo_data_url=_validated_photo(body.photo_data_url),
+        owner_id=current_user.id,
+    )
     session.add(group)
     session.flush()
 
@@ -253,7 +276,7 @@ def create_group(
             continue
         existing_names.add(invite_name.lower())
         invite_email = (invite.email or "").strip() or None
-        linked = _find_linked_user(session, invite_email)
+        linked = _resolve_linked_user(session, invite.user_id, invite_email)
         session.add(
             Member(
                 group_id=group.id,
@@ -274,6 +297,7 @@ def create_group(
         created_at=group.created_at,
         member_count=member_count,
         balance_cents=0,
+        is_owner=True,
     )
 
 
@@ -315,6 +339,38 @@ def edit_group(
     return _group_detail(session, group, current_user)
 
 
+@router.delete("/{group_id}", status_code=204)
+def delete_group(
+    group_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    group = get_group_or_404(session, group_id)
+    require_owner(group, current_user)
+
+    expense_ids = [
+        row for row in session.exec(select(Expense.id).where(Expense.group_id == group_id)).all()
+    ]
+    if expense_ids:
+        for row in session.exec(
+            select(ExpenseShare).where(ExpenseShare.expense_id.in_(expense_ids))
+        ).all():
+            session.delete(row)
+        for row in session.exec(
+            select(ExpenseHistoryEntry).where(ExpenseHistoryEntry.expense_id.in_(expense_ids))
+        ).all():
+            session.delete(row)
+    for row in session.exec(select(Expense).where(Expense.group_id == group_id)).all():
+        session.delete(row)
+    for row in session.exec(select(Settlement).where(Settlement.group_id == group_id)).all():
+        session.delete(row)
+    for row in group_members(session, group_id):
+        session.delete(row)
+    session.delete(group)
+    session.commit()
+    return None
+
+
 @router.post("/{group_id}/members", response_model=GroupDetailOut)
 def add_member(
     group_id: uuid.UUID,
@@ -331,7 +387,7 @@ def add_member(
     if name.lower() in existing:
         raise HTTPException(status_code=422, detail=f"'{name}' is already in this group")
     email = (body.email or "").strip() or None
-    linked = _find_linked_user(session, email)
+    linked = _resolve_linked_user(session, body.user_id, email)
     session.add(
         Member(group_id=group_id, user_id=linked.id if linked else None, name=name, email=email)
     )

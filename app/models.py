@@ -12,7 +12,8 @@ class User(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     email: str = Field(unique=True, index=True)
     name: str | None = None
-    theme: str = Field(default="dark")
+    handle: str | None = Field(default=None, unique=True, index=True)
+    theme: str = Field(default="system")
     created_at: datetime = Field(default_factory=utcnow)
 
 
@@ -38,6 +39,7 @@ class Group(SQLModel, table=True):
     name: str
     currency: str = Field(default="USD")
     photo_data_url: str | None = None
+    owner_id: uuid.UUID | None = Field(default=None, foreign_key="user.id", index=True)
     created_at: datetime = Field(default_factory=utcnow)
 
 

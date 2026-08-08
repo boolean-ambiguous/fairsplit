@@ -153,3 +153,39 @@ def test_remove_self_rejected(client, group_with_members):
     ana_id = group_with_members.member_ids["Ana"]
     resp = client.delete(f"/api/groups/{group_id}/members/{ana_id}")
     assert resp.status_code == 422
+
+
+def test_group_creator_is_owner(client, signed_in):
+    signed_in("Ana")
+    resp = client.post("/api/groups", json={"name": "Ski trip", "currency": "USD"})
+    assert resp.json()["is_owner"] is True
+    listing = client.get("/api/groups").json()
+    assert listing[0]["is_owner"] is True
+
+
+def test_owner_can_delete_group(client, group_with_members):
+    group_id = group_with_members(["Ana", "Ben"])
+    ana_id = group_with_members.member_ids["Ana"]
+    ben_id = group_with_members.member_ids["Ben"]
+    client.post(
+        f"/api/groups/{group_id}/expenses",
+        json={
+            "description": "Lunch",
+            "amount": "10.00",
+            "date": "2024-01-01",
+            "payer_id": str(ana_id),
+            "participant_ids": [str(ana_id), str(ben_id)],
+        },
+    )
+    resp = client.delete(f"/api/groups/{group_id}")
+    assert resp.status_code == 204
+    assert client.get(f"/api/groups/{group_id}").status_code == 404
+
+
+def test_non_owner_cannot_delete_group(client, signed_in, group_with_members):
+    group_id = group_with_members(["Ana", "Ben"])
+    signed_in("Ben")
+    resp = client.delete(f"/api/groups/{group_id}")
+    assert resp.status_code == 403
+    signed_in("Ana")
+    assert client.get(f"/api/groups/{group_id}").status_code == 200

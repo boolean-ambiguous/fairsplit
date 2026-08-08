@@ -136,6 +136,61 @@ def test_invalid_theme_rejected(client, signed_in):
     assert resp.status_code == 422
 
 
+def test_system_theme_accepted(client, signed_in):
+    signed_in("Ana")
+    resp = client.patch("/api/auth/me", json={"theme": "system"})
+    assert resp.status_code == 200
+    assert resp.json()["theme"] == "system"
+
+
+def test_set_handle(client, signed_in):
+    signed_in("Ana")
+    resp = client.post("/api/auth/handle", json={"handle": "Ana_123"})
+    assert resp.status_code == 200
+    assert resp.json()["handle"] == "ana_123"
+
+
+def test_handle_must_be_unique(client, signed_in):
+    signed_in("Ana")
+    client.post("/api/auth/handle", json={"handle": "ana"})
+    signed_in("Bella")
+    resp = client.post("/api/auth/handle", json={"handle": "ana"})
+    assert resp.status_code == 409
+
+
+def test_handle_format_rejected(client, signed_in):
+    signed_in("Ana")
+    resp = client.post("/api/auth/handle", json={"handle": "a"})
+    assert resp.status_code == 422
+    resp = client.post("/api/auth/handle", json={"handle": "has space"})
+    assert resp.status_code == 422
+
+
+def test_update_handle_via_patch_me(client, signed_in):
+    signed_in("Ana")
+    client.post("/api/auth/handle", json={"handle": "ana"})
+    resp = client.patch("/api/auth/me", json={"handle": "ana_new"})
+    assert resp.status_code == 200
+    assert resp.json()["handle"] == "ana_new"
+
+
+def test_search_users_by_handle(client, signed_in):
+    signed_in("Ana")
+    client.post("/api/auth/handle", json={"handle": "ana_skier"})
+    signed_in("Bella")
+    resp = client.get("/api/users/search", params={"q": "ana_sk"})
+    assert resp.status_code == 200
+    handles = {u["handle"] for u in resp.json()}
+    assert "ana_skier" in handles
+
+
+def test_search_users_excludes_self(client, signed_in):
+    signed_in("Ana")
+    client.post("/api/auth/handle", json={"handle": "ana_skier"})
+    resp = client.get("/api/users/search", params={"q": "ana"})
+    assert resp.json() == []
+
+
 def test_logout_clears_session(client, signed_in):
     signed_in("Ana")
     assert client.get("/api/auth/me").status_code == 200

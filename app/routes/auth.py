@@ -1,12 +1,23 @@
 import logging
+import re
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.config import UntrustedRequestOriginError, resolve_frontend_base_url
 from app.database import get_session
 from app.models import User
-from app.schemas import NameRequest, SignupRequest, UpdateMeRequest, UserOut, VerifyRequest
+from app.schemas import (
+    HANDLE_MAX_LEN,
+    HANDLE_MIN_LEN,
+    THEMES,
+    HandleRequest,
+    NameRequest,
+    SignupRequest,
+    UpdateMeRequest,
+    UserOut,
+    VerifyRequest,
+)
 from app.services.auth import (
     SESSION_COOKIE,
     AuthError,
@@ -24,9 +35,24 @@ logger = logging.getLogger("fairsplit.auth")
 
 router = APIRouter(prefix="/api/auth")
 
+HANDLE_PATTERN = re.compile(r"^[a-z0-9_]+$")
+
 
 def _user_out(user: User) -> UserOut:
-    return UserOut(id=user.id, email=user.email, name=user.name, theme=user.theme)
+    return UserOut(id=user.id, email=user.email, name=user.name, handle=user.handle, theme=user.theme)
+
+
+def _normalize_handle(session: Session, current_user: User, raw: str) -> str:
+    handle = raw.strip().lstrip("@").lower()
+    if len(handle) < HANDLE_MIN_LEN or len(handle) > HANDLE_MAX_LEN or not HANDLE_PATTERN.match(handle):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Handle must be {HANDLE_MIN_LEN}-{HANDLE_MAX_LEN} characters, lowercase letters, numbers, or underscores only",
+        )
+    existing = session.exec(select(User).where(User.handle == handle)).first()
+    if existing is not None and existing.id != current_user.id:
+        raise HTTPException(status_code=409, detail="That handle is already taken")
+    return handle
 
 
 @router.post("/signup", status_code=202)
@@ -96,6 +122,19 @@ def set_name(
     return _user_out(current_user)
 
 
+@router.post("/handle", response_model=UserOut)
+def set_handle(
+    body: HandleRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    current_user.handle = _normalize_handle(session, current_user, body.handle)
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    return _user_out(current_user)
+
+
 @router.patch("/me", response_model=UserOut)
 def update_me(
     body: UpdateMeRequest,
@@ -107,9 +146,11 @@ def update_me(
         if not name:
             raise HTTPException(status_code=422, detail="Name is required")
         current_user.name = name
+    if body.handle is not None:
+        current_user.handle = _normalize_handle(session, current_user, body.handle)
     if body.theme is not None:
-        if body.theme not in ("dark", "light"):
-            raise HTTPException(status_code=422, detail="Theme must be 'dark' or 'light'")
+        if body.theme not in THEMES:
+            raise HTTPException(status_code=422, detail="Theme must be 'system', 'light', or 'dark'")
         current_user.theme = body.theme
     session.add(current_user)
     session.commit()

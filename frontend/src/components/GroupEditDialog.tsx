@@ -6,6 +6,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   IconButton,
   MenuItem,
   Stack,
@@ -14,6 +15,7 @@ import {
 } from '@mui/material'
 import { api, ApiError } from '../api/client'
 import { CURRENCIES, type Currency, type GroupDetail } from '../api/types'
+import MemberSearchInput, { type InviteValue } from './MemberSearchInput'
 import PhotoUpload from './PhotoUpload'
 
 interface Props {
@@ -21,6 +23,7 @@ interface Props {
   group: GroupDetail
   onClose: () => void
   onSaved: () => void
+  onDeleted: () => void
 }
 
 interface MemberRow {
@@ -28,16 +31,33 @@ interface MemberRow {
   name: string
 }
 
-export default function GroupEditDialog({ open, group, onClose, onSaved }: Props) {
+export default function GroupEditDialog({ open, group, onClose, onSaved, onDeleted }: Props) {
   const [name, setName] = useState(group.name)
   const [currency, setCurrency] = useState<Currency>(group.currency)
   const [photo, setPhoto] = useState<string | null>(group.photo_data_url)
   const [members, setMembers] = useState<MemberRow[]>(
     group.members.map((m) => ({ id: m.id, name: m.name })),
   )
-  const [newInvites, setNewInvites] = useState<string[]>([])
+  const [newInvites, setNewInvites] = useState<InviteValue[]>([])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete "${group.name}"? This permanently removes all its expenses and history.`)) {
+      return
+    }
+    setError(null)
+    setDeleting(true)
+    try {
+      await api.deleteGroup(group.id)
+      onDeleted()
+    } catch (err) {
+      if (err instanceof ApiError) setError(err.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   useEffect(() => {
     if (!open) return
@@ -61,7 +81,7 @@ export default function GroupEditDialog({ open, group, onClose, onSaved }: Props
         }
       }
       for (const invite of newInvites) {
-        if (invite.trim()) await api.addMember(group.id, invite.trim())
+        if (invite.text.trim()) await api.addMember(group.id, invite.text.trim(), undefined, invite.userId)
       }
       onSaved()
     } catch (err) {
@@ -124,14 +144,9 @@ export default function GroupEditDialog({ open, group, onClose, onSaved }: Props
               ))}
               {newInvites.map((value, i) => (
                 <Stack direction="row" spacing={1} key={`new-${i}`}>
-                  <TextField
-                    size="small"
-                    placeholder="Name"
+                  <MemberSearchInput
                     value={value}
-                    onChange={(e) =>
-                      setNewInvites((rows) => rows.map((r, j) => (j === i ? e.target.value : r)))
-                    }
-                    sx={{ flex: 1 }}
+                    onChange={(next) => setNewInvites((rows) => rows.map((r, j) => (j === i ? next : r)))}
                   />
                   <IconButton size="small" onClick={() => setNewInvites((rows) => rows.filter((_, j) => j !== i))}>
                     ✕
@@ -139,7 +154,7 @@ export default function GroupEditDialog({ open, group, onClose, onSaved }: Props
                 </Stack>
               ))}
             </Stack>
-            <Button size="small" onClick={() => setNewInvites((rows) => [...rows, ''])} sx={{ mt: 1 }}>
+            <Button size="small" onClick={() => setNewInvites((rows) => [...rows, { text: '' }])} sx={{ mt: 1 }}>
               + Add another person
             </Button>
           </Box>
@@ -147,6 +162,17 @@ export default function GroupEditDialog({ open, group, onClose, onSaved }: Props
             <Typography color="error" variant="body2">
               {error}
             </Typography>
+          )}
+          {group.is_owner && (
+            <Box>
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                Danger zone
+              </Typography>
+              <Button color="error" variant="outlined" onClick={handleDelete} disabled={deleting}>
+                Delete group
+              </Button>
+            </Box>
           )}
         </Stack>
       </DialogContent>

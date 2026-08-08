@@ -253,6 +253,10 @@ export default function GroupDetail() {
           setShowEditGroup(false)
           refresh()
         }}
+        onDeleted={() => {
+          setShowEditGroup(false)
+          navigate('/', { replace: true })
+        }}
       />
       <SettleUpDialog
         open={showSettleUp}
