@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  Fade,
   IconButton,
   MenuItem,
   Stack,
@@ -15,7 +16,7 @@ import {
 } from '@mui/material'
 import { api, ApiError } from '../api/client'
 import { CURRENCIES, type Currency, type GroupDetail } from '../api/types'
-import MemberSearchInput, { type InviteValue } from './MemberSearchInput'
+import MemberSearchInput, { toInvitePayload, type InviteValue } from './MemberSearchInput'
 import PhotoUpload from './PhotoUpload'
 
 interface Props {
@@ -42,11 +43,9 @@ export default function GroupEditDialog({ open, group, onClose, onSaved, onDelet
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const handleDelete = async () => {
-    if (!window.confirm(`Delete "${group.name}"? This permanently removes all its expenses and history.`)) {
-      return
-    }
     setError(null)
     setDeleting(true)
     try {
@@ -67,6 +66,7 @@ export default function GroupEditDialog({ open, group, onClose, onSaved, onDelet
     setMembers(group.members.map((m) => ({ id: m.id, name: m.name })))
     setNewInvites([])
     setError(null)
+    setConfirmingDelete(false)
   }, [open, group])
 
   const handleSubmit = async () => {
@@ -81,7 +81,8 @@ export default function GroupEditDialog({ open, group, onClose, onSaved, onDelet
         }
       }
       for (const invite of newInvites) {
-        if (invite.text.trim()) await api.addMember(group.id, invite.text.trim(), undefined, invite.userId)
+        const payload = toInvitePayload(invite)
+        if (payload.name) await api.addMember(group.id, payload.name, payload.email, payload.userId)
       }
       onSaved()
     } catch (err) {
@@ -169,9 +170,31 @@ export default function GroupEditDialog({ open, group, onClose, onSaved, onDelet
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                 Danger zone
               </Typography>
-              <Button color="error" variant="outlined" onClick={handleDelete} disabled={deleting}>
-                Delete group
-              </Button>
+              {!confirmingDelete ? (
+                <Button color="error" variant="outlined" onClick={() => setConfirmingDelete(true)}>
+                  Delete group
+                </Button>
+              ) : (
+                <Fade in={confirmingDelete}>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Typography variant="body2" color="error" sx={{ flex: 1 }}>
+                      Delete "{group.name}"? This can't be undone.
+                    </Typography>
+                    <Button size="small" onClick={() => setConfirmingDelete(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      variant="contained"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                    >
+                      Confirm delete
+                    </Button>
+                  </Stack>
+                </Fade>
+              )}
             </Box>
           )}
         </Stack>

@@ -215,7 +215,7 @@ def test_repeated_signup_from_same_ip_is_rate_limited(client):
     assert resp.status_code == 429
 
 
-def test_invited_placeholder_links_to_account_on_verify(client, engine, signed_in):
+def test_invited_by_email_links_to_account_immediately(client, engine, signed_in):
     signed_in("Ana", email="ana@example.com")
     resp = client.post(
         "/api/groups",
@@ -228,14 +228,41 @@ def test_invited_placeholder_links_to_account_on_verify(client, engine, signed_i
     group_id = resp.json()["id"]
     detail = client.get(f"/api/groups/{group_id}").json()
     ben_member = next(m for m in detail["members"] if m["name"] == "Ben")
-    assert ben_member["user_id"] is None
+    # Inviting by email now finds-or-creates Ben's account up front (so the
+    # invite email can carry a working magic link) and links the membership
+    # right away, rather than waiting for a separate passive-link step.
+    assert ben_member["user_id"] is not None
 
     with Session(engine) as session:
         member = session.get(Member, uuid.UUID(ben_member["id"]))
         assert member is not None
 
-    # Ben signs up with the matching email — his placeholder membership
-    # should link to his account as soon as he verifies.
+    # Ben follows the invite link (a magic link generated for him at invite
+    # time) — no separate signup step needed.
+    token = latest_token(engine, "ben@example.com")
+    client.post("/api/auth/verify", json={"token": token.token})
+    client.post("/api/auth/name", json={"name": "Ben"})
+
+    groups = client.get("/api/groups").json()
+    assert any(g["id"] == group_id for g in groups)
+
+
+def test_placeholder_without_email_links_on_verify(client, engine, signed_in):
+    # A member added by name only (no email) stays a bare placeholder — the
+    # passive _link_invited_memberships path only fires for members that
+    # *do* have an email, so this covers the case where someone signs up
+    # independently with an email matching a placeholder added elsewhere.
+    signed_in("Ana", email="ana@example.com")
+    resp = client.post(
+        "/api/groups",
+        json={"name": "Trip", "currency": "USD", "invites": []},
+    )
+    group_id = resp.json()["id"]
+    with Session(engine) as session:
+        member = Member(group_id=uuid.UUID(group_id), name="Ben", email="ben@example.com")
+        session.add(member)
+        session.commit()
+
     client.post("/api/auth/signup", json={"email": "ben@example.com"})
     token = latest_token(engine, "ben@example.com")
     client.post("/api/auth/verify", json={"token": token.token})

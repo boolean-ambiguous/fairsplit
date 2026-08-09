@@ -41,6 +41,7 @@ export interface Member {
 export interface InviteMember {
   name: string
   email?: string
+  user_id?: string
 }
 
 export interface GroupCreate {

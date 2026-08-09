@@ -1,9 +1,11 @@
 import json
+import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session, select
 
+from app.config import UntrustedRequestOriginError, resolve_frontend_base_url
 from app.database import get_session
 from app.models import (
     Expense,
@@ -33,11 +35,12 @@ from app.schemas import (
     SettlementRecordOut,
     SuggestedPaymentOut,
 )
-from app.services.auth import get_current_user
+from app.services.auth import RateLimitedError, get_current_user, start_signup
 from app.services.balances import (
     compute_counterparty_balances,
     compute_outstanding_balances,
 )
+from app.services.email import send_invite_email
 from app.services.expenses import (
     ExpenseError,
     expense_shares,
@@ -45,7 +48,10 @@ from app.services.expenses import (
     update_expense,
 )
 from app.services.money import MoneyError, format_cents, parse_amount, parse_share
+from app.services.rate_limit import group_invite_limiter
 from app.services.settlements import suggest_settlements
+
+logger = logging.getLogger("fairsplit.groups")
 
 router = APIRouter(prefix="/api/groups")
 
@@ -116,6 +122,33 @@ def _resolve_linked_user(
             raise HTTPException(status_code=422, detail="Selected user not found")
         return linked
     return _find_linked_user(session, email)
+
+
+def _invite_new_member_by_email(
+    session: Session, request: Request, current_user: User, group: Group, email: str
+) -> User | None:
+    """Find-or-create a User for `email` and, budget permitting, email them a
+    ready-to-use magic link so they can sign in and land in `group`."""
+    if not group_invite_limiter.allow(str(current_user.id)):
+        return _find_linked_user(session, email)
+    try:
+        user, token = start_signup(session, email)
+    except RateLimitedError:
+        return _find_linked_user(session, email)
+    try:
+        base_url = resolve_frontend_base_url(
+            str(request.base_url), request.headers.get("origin")
+        )
+    except UntrustedRequestOriginError:
+        logger.error(
+            "Rejected group invite email: request Host %r is not loopback/private "
+            "and FAIRSPLIT_FRONTEND_URL is not set.",
+            request.headers.get("host"),
+        )
+        return user
+    link = f"{base_url}/verify?token={token.token}"
+    send_invite_email(user.email, link, current_user.name or current_user.email, group.name)
+    return user
 
 
 def _history_entries(session: Session, expense_id: uuid.UUID) -> list[ExpenseHistoryEntryOut]:
@@ -240,6 +273,7 @@ def list_groups(
 @router.post("", response_model=GroupOut, status_code=201)
 def create_group(
     body: GroupCreate,
+    request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -277,6 +311,10 @@ def create_group(
         existing_names.add(invite_name.lower())
         invite_email = (invite.email or "").strip() or None
         linked = _resolve_linked_user(session, invite.user_id, invite_email)
+        if linked is None and invite_email:
+            linked = _invite_new_member_by_email(
+                session, request, current_user, group, invite_email
+            )
         session.add(
             Member(
                 group_id=group.id,
@@ -375,6 +413,7 @@ def delete_group(
 def add_member(
     group_id: uuid.UUID,
     body: MemberCreate,
+    request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -388,6 +427,8 @@ def add_member(
         raise HTTPException(status_code=422, detail=f"'{name}' is already in this group")
     email = (body.email or "").strip() or None
     linked = _resolve_linked_user(session, body.user_id, email)
+    if linked is None and email:
+        linked = _invite_new_member_by_email(session, request, current_user, group, email)
     session.add(
         Member(group_id=group_id, user_id=linked.id if linked else None, name=name, email=email)
     )

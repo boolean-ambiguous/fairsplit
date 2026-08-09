@@ -19,6 +19,9 @@ def _stub_email(monkeypatch):
     the same target themselves, which simply overrides this stub for that
     test."""
     monkeypatch.setattr("app.routes.auth.send_magic_link", lambda email, link: None)
+    monkeypatch.setattr(
+        "app.routes.groups.send_invite_email", lambda email, link, inviter_name, group_name: None
+    )
 
 
 @pytest.fixture(autouse=True)
