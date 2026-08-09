@@ -12,11 +12,20 @@ export const CURRENCY_SYMBOLS: Record<Currency, string> = {
 
 // ---- Auth ----
 
+export type Theme = 'system' | 'dark' | 'light'
+
 export interface User {
   id: string
   email: string
   name: string | null
-  theme: 'dark' | 'light'
+  handle: string | null
+  theme: Theme
+}
+
+export interface UserSearchResult {
+  id: string
+  name: string | null
+  handle: string | null
 }
 
 // ---- Groups / members ----
@@ -32,6 +41,7 @@ export interface Member {
 export interface InviteMember {
   name: string
   email?: string
+  user_id?: string
 }
 
 export interface GroupCreate {
@@ -55,6 +65,7 @@ export interface Group {
   created_at: string
   member_count: number
   balance_cents: number
+  is_owner: boolean
 }
 
 // ---- Expenses ----
@@ -138,6 +149,7 @@ export interface GroupDetail {
   currency: Currency
   photo_data_url: string | null
   created_at: string
+  is_owner: boolean
   members: Member[]
   expenses: Expense[]
   balances: Balance[]

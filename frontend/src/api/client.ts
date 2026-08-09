@@ -9,7 +9,9 @@ import type {
   GroupUpdate,
   Member,
   SettlementCreate,
+  Theme,
   User,
+  UserSearchResult,
 } from './types'
 
 export class ApiError extends Error {
@@ -48,10 +50,14 @@ export const api = {
     request<User>('/auth/verify', { method: 'POST', body: JSON.stringify({ token }) }),
   setName: (name: string) =>
     request<User>('/auth/name', { method: 'POST', body: JSON.stringify({ name }) }),
+  setHandle: (handle: string) =>
+    request<User>('/auth/handle', { method: 'POST', body: JSON.stringify({ handle }) }),
   me: () => request<User>('/auth/me'),
-  updateMe: (body: { name?: string; theme?: 'dark' | 'light' }) =>
+  updateMe: (body: { name?: string; handle?: string; theme?: Theme }) =>
     request<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
+  searchUsers: (q: string) =>
+    request<UserSearchResult[]>(`/users/search?q=${encodeURIComponent(q)}`),
 
   // groups
   listGroups: () => request<Group[]>('/groups'),
@@ -60,10 +66,12 @@ export const api = {
   getGroup: (groupId: string) => request<GroupDetail>(`/groups/${groupId}`),
   updateGroup: (groupId: string, body: GroupUpdate) =>
     request<GroupDetail>(`/groups/${groupId}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  addMember: (groupId: string, name: string, email?: string) =>
+  deleteGroup: (groupId: string) =>
+    request<void>(`/groups/${groupId}`, { method: 'DELETE' }),
+  addMember: (groupId: string, name: string, email?: string, userId?: string) =>
     request<GroupDetail>(`/groups/${groupId}/members`, {
       method: 'POST',
-      body: JSON.stringify({ name, email }),
+      body: JSON.stringify({ name, email, user_id: userId }),
     }),
   renameMember: (groupId: string, memberId: string, name: string) =>
     request<GroupDetail>(`/groups/${groupId}/members/${memberId}`, {

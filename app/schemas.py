@@ -13,6 +13,9 @@ TOKEN_MAX_LEN = 512
 NOTES_MAX_LEN = 2000
 DESCRIPTION_MAX_LEN = 200
 AMOUNT_MAX_LEN = 20  # e.g. "-9999999999999999.99"
+HANDLE_MAX_LEN = 20
+HANDLE_MIN_LEN = 3
+THEMES = ("system", "light", "dark")
 
 
 # ---- Auth ----
@@ -22,6 +25,7 @@ class UserOut(BaseModel):
     id: uuid.UUID
     email: str
     name: str | None
+    handle: str | None
     theme: str
 
 
@@ -37,9 +41,20 @@ class NameRequest(BaseModel):
     name: str = Field(max_length=NAME_MAX_LEN)
 
 
+class HandleRequest(BaseModel):
+    handle: str = Field(max_length=HANDLE_MAX_LEN)
+
+
 class UpdateMeRequest(BaseModel):
     name: str | None = Field(default=None, max_length=NAME_MAX_LEN)
+    handle: str | None = Field(default=None, max_length=HANDLE_MAX_LEN)
     theme: str | None = None
+
+
+class UserSearchOut(BaseModel):
+    id: uuid.UUID
+    name: str | None
+    handle: str | None
 
 
 # ---- Groups / members ----
@@ -56,6 +71,7 @@ class MemberOut(BaseModel):
 class InviteMember(BaseModel):
     name: str = Field(max_length=NAME_MAX_LEN)
     email: str | None = Field(default=None, max_length=EMAIL_MAX_LEN)
+    user_id: uuid.UUID | None = None
 
 
 class GroupCreate(BaseModel):
@@ -74,6 +90,7 @@ class GroupUpdate(BaseModel):
 class MemberCreate(BaseModel):
     name: str = Field(max_length=NAME_MAX_LEN)
     email: str | None = Field(default=None, max_length=EMAIL_MAX_LEN)
+    user_id: uuid.UUID | None = None
 
 
 class MemberUpdate(BaseModel):
@@ -88,6 +105,7 @@ class GroupOut(BaseModel):
     created_at: datetime
     member_count: int
     balance_cents: int
+    is_owner: bool
 
 
 # ---- Expenses ----
@@ -175,6 +193,7 @@ class GroupDetailOut(BaseModel):
     currency: str
     photo_data_url: str | None
     created_at: datetime
+    is_owner: bool
     members: list[MemberOut]
     expenses: list[ExpenseOut]
     balances: list[BalanceOut]

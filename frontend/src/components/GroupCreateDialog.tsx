@@ -14,12 +14,8 @@ import {
 } from '@mui/material'
 import { api, ApiError } from '../api/client'
 import { CURRENCIES, type Currency } from '../api/types'
+import MemberSearchInput, { toInvitePayload, type InviteValue } from './MemberSearchInput'
 import PhotoUpload from './PhotoUpload'
-
-interface InviteRow {
-  name: string
-  email: string
-}
 
 interface Props {
   open: boolean
@@ -27,13 +23,11 @@ interface Props {
   onCreated: (groupId: string) => void
 }
 
-const EMPTY_ROW: InviteRow = { name: '', email: '' }
-
 export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
   const [name, setName] = useState('')
   const [currency, setCurrency] = useState<Currency>('USD')
   const [photo, setPhoto] = useState<string | null>(null)
-  const [invites, setInvites] = useState<InviteRow[]>([{ ...EMPTY_ROW }])
+  const [invites, setInvites] = useState<InviteValue[]>([{ text: '' }])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -41,7 +35,7 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
     setName('')
     setCurrency('USD')
     setPhoto(null)
-    setInvites([{ ...EMPTY_ROW }])
+    setInvites([{ text: '' }])
     setError(null)
   }
 
@@ -59,8 +53,9 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
         currency,
         photo_data_url: photo,
         invites: invites
-          .filter((i) => i.name.trim())
-          .map((i) => ({ name: i.name.trim(), email: i.email.trim() || undefined })),
+          .map(toInvitePayload)
+          .filter((i) => i.name)
+          .map((i) => ({ name: i.name, email: i.email, user_id: i.userId })),
       })
       reset()
       onCreated(group.id)
@@ -102,25 +97,11 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
               Invite people
             </Typography>
             <Stack spacing={1}>
-              {invites.map((row, i) => (
+              {invites.map((value, i) => (
                 <Stack direction="row" spacing={1} key={i}>
-                  <TextField
-                    size="small"
-                    placeholder="Name"
-                    value={row.name}
-                    onChange={(e) =>
-                      setInvites((rows) => rows.map((r, j) => (j === i ? { ...r, name: e.target.value } : r)))
-                    }
-                    sx={{ flex: 1 }}
-                  />
-                  <TextField
-                    size="small"
-                    placeholder="Email"
-                    value={row.email}
-                    onChange={(e) =>
-                      setInvites((rows) => rows.map((r, j) => (j === i ? { ...r, email: e.target.value } : r)))
-                    }
-                    sx={{ flex: 1 }}
+                  <MemberSearchInput
+                    value={value}
+                    onChange={(next) => setInvites((rows) => rows.map((r, j) => (j === i ? next : r)))}
                   />
                   <IconButton size="small" onClick={() => setInvites((rows) => rows.filter((_, j) => j !== i))}>
                     ✕
@@ -128,7 +109,7 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
                 </Stack>
               ))}
             </Stack>
-            <Button size="small" onClick={() => setInvites((rows) => [...rows, { ...EMPTY_ROW }])} sx={{ mt: 1 }}>
+            <Button size="small" onClick={() => setInvites((rows) => [...rows, { text: '' }])} sx={{ mt: 1 }}>
               + Add another person
             </Button>
           </Box>

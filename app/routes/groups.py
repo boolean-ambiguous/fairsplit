@@ -1,9 +1,11 @@
 import json
+import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session, select
 
+from app.config import UntrustedRequestOriginError, resolve_frontend_base_url
 from app.database import get_session
 from app.models import (
     Expense,
@@ -33,11 +35,12 @@ from app.schemas import (
     SettlementRecordOut,
     SuggestedPaymentOut,
 )
-from app.services.auth import get_current_user
+from app.services.auth import RateLimitedError, get_current_user, start_signup
 from app.services.balances import (
     compute_counterparty_balances,
     compute_outstanding_balances,
 )
+from app.services.email import send_invite_email
 from app.services.expenses import (
     ExpenseError,
     expense_shares,
@@ -45,7 +48,10 @@ from app.services.expenses import (
     update_expense,
 )
 from app.services.money import MoneyError, format_cents, parse_amount, parse_share
+from app.services.rate_limit import group_invite_limiter
 from app.services.settlements import suggest_settlements
+
+logger = logging.getLogger("fairsplit.groups")
 
 router = APIRouter(prefix="/api/groups")
 
@@ -96,10 +102,53 @@ def require_membership(session: Session, group_id: uuid.UUID, user: User) -> Mem
     return member
 
 
+def require_owner(group: Group, user: User) -> None:
+    if group.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Only the group owner can do this")
+
+
 def _find_linked_user(session: Session, email: str | None) -> User | None:
     if not email:
         return None
     return session.exec(select(User).where(User.email == email.strip().lower())).first()
+
+
+def _resolve_linked_user(
+    session: Session, user_id: uuid.UUID | None, email: str | None
+) -> User | None:
+    if user_id is not None:
+        linked = session.get(User, user_id)
+        if linked is None:
+            raise HTTPException(status_code=422, detail="Selected user not found")
+        return linked
+    return _find_linked_user(session, email)
+
+
+def _invite_new_member_by_email(
+    session: Session, request: Request, current_user: User, group: Group, email: str
+) -> User | None:
+    """Find-or-create a User for `email` and, budget permitting, email them a
+    ready-to-use magic link so they can sign in and land in `group`."""
+    if not group_invite_limiter.allow(str(current_user.id)):
+        return _find_linked_user(session, email)
+    try:
+        user, token = start_signup(session, email)
+    except RateLimitedError:
+        return _find_linked_user(session, email)
+    try:
+        base_url = resolve_frontend_base_url(
+            str(request.base_url), request.headers.get("origin")
+        )
+    except UntrustedRequestOriginError:
+        logger.error(
+            "Rejected group invite email: request Host %r is not loopback/private "
+            "and FAIRSPLIT_FRONTEND_URL is not set.",
+            request.headers.get("host"),
+        )
+        return user
+    link = f"{base_url}/verify?token={token.token}"
+    send_invite_email(user.email, link, current_user.name or current_user.email, group.name)
+    return user
 
 
 def _history_entries(session: Session, expense_id: uuid.UUID) -> list[ExpenseHistoryEntryOut]:
@@ -161,6 +210,7 @@ def _group_detail(session: Session, group: Group, current_user: User) -> GroupDe
         currency=group.currency,
         photo_data_url=group.photo_data_url,
         created_at=group.created_at,
+        is_owner=group.owner_id == current_user.id,
         members=[
             MemberOut(id=m.id, name=m.name, email=m.email, user_id=m.user_id, created_at=m.created_at)
             for m in members
@@ -214,6 +264,7 @@ def list_groups(
                 created_at=group.created_at,
                 member_count=len(group_members(session, group.id)),
                 balance_cents=balance,
+                is_owner=group.owner_id == current_user.id,
             )
         )
     return out
@@ -222,6 +273,7 @@ def list_groups(
 @router.post("", response_model=GroupOut, status_code=201)
 def create_group(
     body: GroupCreate,
+    request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -233,7 +285,12 @@ def create_group(
     if not current_user.name:
         raise HTTPException(status_code=422, detail="Set your name before creating a group")
 
-    group = Group(name=name, currency=body.currency, photo_data_url=_validated_photo(body.photo_data_url))
+    group = Group(
+        name=name,
+        currency=body.currency,
+        photo_data_url=_validated_photo(body.photo_data_url),
+        owner_id=current_user.id,
+    )
     session.add(group)
     session.flush()
 
@@ -253,7 +310,11 @@ def create_group(
             continue
         existing_names.add(invite_name.lower())
         invite_email = (invite.email or "").strip() or None
-        linked = _find_linked_user(session, invite_email)
+        linked = _resolve_linked_user(session, invite.user_id, invite_email)
+        if linked is None and invite_email:
+            linked = _invite_new_member_by_email(
+                session, request, current_user, group, invite_email
+            )
         session.add(
             Member(
                 group_id=group.id,
@@ -274,6 +335,7 @@ def create_group(
         created_at=group.created_at,
         member_count=member_count,
         balance_cents=0,
+        is_owner=True,
     )
 
 
@@ -315,10 +377,43 @@ def edit_group(
     return _group_detail(session, group, current_user)
 
 
+@router.delete("/{group_id}", status_code=204)
+def delete_group(
+    group_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    group = get_group_or_404(session, group_id)
+    require_owner(group, current_user)
+
+    expense_ids = [
+        row for row in session.exec(select(Expense.id).where(Expense.group_id == group_id)).all()
+    ]
+    if expense_ids:
+        for row in session.exec(
+            select(ExpenseShare).where(ExpenseShare.expense_id.in_(expense_ids))
+        ).all():
+            session.delete(row)
+        for row in session.exec(
+            select(ExpenseHistoryEntry).where(ExpenseHistoryEntry.expense_id.in_(expense_ids))
+        ).all():
+            session.delete(row)
+    for row in session.exec(select(Expense).where(Expense.group_id == group_id)).all():
+        session.delete(row)
+    for row in session.exec(select(Settlement).where(Settlement.group_id == group_id)).all():
+        session.delete(row)
+    for row in group_members(session, group_id):
+        session.delete(row)
+    session.delete(group)
+    session.commit()
+    return None
+
+
 @router.post("/{group_id}/members", response_model=GroupDetailOut)
 def add_member(
     group_id: uuid.UUID,
     body: MemberCreate,
+    request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -331,7 +426,9 @@ def add_member(
     if name.lower() in existing:
         raise HTTPException(status_code=422, detail=f"'{name}' is already in this group")
     email = (body.email or "").strip() or None
-    linked = _find_linked_user(session, email)
+    linked = _resolve_linked_user(session, body.user_id, email)
+    if linked is None and email:
+        linked = _invite_new_member_by_email(session, request, current_user, group, email)
     session.add(
         Member(group_id=group_id, user_id=linked.id if linked else None, name=name, email=email)
     )

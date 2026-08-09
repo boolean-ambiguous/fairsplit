@@ -26,3 +26,4 @@ class InMemoryRateLimiter:
 
 
 signup_ip_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=900)
+group_invite_limiter = InMemoryRateLimiter(max_requests=20, window_seconds=900)

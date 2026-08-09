@@ -29,6 +29,17 @@ interface Props {
 
 const today = () => new Date().toISOString().slice(0, 10)
 
+function evenSplitCents(totalCents: number, memberIds: string[]): Record<string, number> {
+  if (memberIds.length === 0) return {}
+  const base = Math.floor(totalCents / memberIds.length)
+  const remainder = totalCents % memberIds.length
+  const out: Record<string, number> = {}
+  memberIds.forEach((id, i) => {
+    out[id] = base + (i < remainder ? 1 : 0)
+  })
+  return out
+}
+
 export default function AddExpenseDialog({ open, group, myMemberId, editing, onClose, onSaved }: Props) {
   const [step, setStep] = useState<1 | 2>(1)
   const [desc, setDesc] = useState('')
@@ -98,6 +109,18 @@ export default function AddExpenseDialog({ open, group, myMemberId, editing, onC
 
   const toggleCustom = (id: string) => {
     setCustomIncluded((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const editEvenAmount = (memberId: string, rawValue: string) => {
+    const involvedIds = group.members.map((m) => m.id).filter((id) => involved.has(id))
+    const evenCents = evenSplitCents(totalCents, involvedIds)
+    const seeded = Object.fromEntries(
+      Object.entries(evenCents).map(([id, cents]) => [id, (cents / 100).toFixed(2)]),
+    )
+    seeded[memberId] = rawValue
+    setCustomAmounts(seeded)
+    setCustomIncluded(Object.fromEntries(group.members.map((m) => [m.id, involved.has(m.id)])))
+    setSplitMode('exact')
   }
 
   const goToStep2 = () => {
@@ -288,21 +311,45 @@ export default function AddExpenseDialog({ open, group, myMemberId, editing, onC
             {splitMode === 'even' ? (
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                  Who's splitting this?
+                  Who's splitting this? Each share defaults to an even split — edit any amount to customize.
                 </Typography>
                 <Stack spacing={0.5}>
-                  {group.members.map((m) => (
-                    <Stack
-                      key={m.id}
-                      direction="row"
-                      spacing={1.25}
-                      onClick={() => toggleInvolved(m.id)}
-                      sx={{ p: 1, borderRadius: '8px', bgcolor: 'background.paper', cursor: 'pointer', alignItems: 'center' }}
-                    >
-                      <Checkbox checked={involved.has(m.id)} size="small" sx={{ p: 0 }} />
-                      <Typography variant="body2">{m.id === myMemberId ? 'You' : m.name}</Typography>
-                    </Stack>
-                  ))}
+                  {(() => {
+                    const involvedIds = group.members.map((m) => m.id).filter((id) => involved.has(id))
+                    const evenCents = evenSplitCents(totalCents, involvedIds)
+                    return group.members.map((m) => (
+                      <Stack
+                        key={m.id}
+                        direction="row"
+                        spacing={1.25}
+                        sx={{ p: 1, borderRadius: '8px', bgcolor: 'background.paper', alignItems: 'center' }}
+                      >
+                        <Checkbox
+                          checked={involved.has(m.id)}
+                          onChange={() => toggleInvolved(m.id)}
+                          size="small"
+                          sx={{ p: 0 }}
+                        />
+                        <Typography
+                          variant="body2"
+                          sx={{ flex: 1, cursor: 'pointer' }}
+                          onClick={() => toggleInvolved(m.id)}
+                        >
+                          {m.id === myMemberId ? 'You' : m.name}
+                        </Typography>
+                        <TextField
+                          size="small"
+                          type="number"
+                          placeholder="0.00"
+                          disabled={!involved.has(m.id)}
+                          value={involved.has(m.id) ? ((evenCents[m.id] ?? 0) / 100).toFixed(2) : ''}
+                          onChange={(e) => editEvenAmount(m.id, e.target.value)}
+                          sx={{ width: 90 }}
+                          slotProps={{ htmlInput: { style: { textAlign: 'right' } } }}
+                        />
+                      </Stack>
+                    ))
+                  })()}
                 </Stack>
               </Box>
             ) : (
