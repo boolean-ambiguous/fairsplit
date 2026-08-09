@@ -176,7 +176,7 @@ export default function GroupEditDialog({ open, group, onClose, onSaved, onDelet
                 </Button>
               ) : (
                 <Fade in={confirmingDelete}>
-                  <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                     <Typography variant="body2" color="error" sx={{ flex: 1 }}>
                       Delete "{group.name}"? This can't be undone.
                     </Typography>
