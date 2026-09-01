@@ -14,6 +14,7 @@ class User(SQLModel, table=True):
     name: str | None = None
     handle: str | None = Field(default=None, unique=True, index=True)
     theme: str = Field(default="system")
+    password_hash: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=utcnow)
 
 

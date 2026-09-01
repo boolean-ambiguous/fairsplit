@@ -20,6 +20,7 @@ export interface User {
   name: string | null
   handle: string | null
   theme: Theme
+  has_password: boolean
 }
 
 export interface UserSearchResult {

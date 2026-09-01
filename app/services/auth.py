@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import LoginSession, MagicLinkToken, Member, User, utcnow
+from app.services.passwords import DUMMY_HASH, verify_password
 
 SESSION_COOKIE = "fairsplit_session"
 MAGIC_LINK_TTL = timedelta(minutes=30)
@@ -55,6 +56,25 @@ def start_signup(session: Session, email: str) -> tuple[User, MagicLinkToken]:
     session.commit()
     session.refresh(token)
     return user, token
+
+
+def authenticate_with_password(session: Session, identifier: str, password: str) -> User:
+    key = identifier.strip().lstrip("@").lower()
+    generic_error = AuthError("Incorrect email/username or password.")
+    if not key or not password:
+        raise generic_error
+    user = session.exec(select(User).where(User.email == key)).first()
+    if user is None:
+        user = session.exec(select(User).where(User.handle == key)).first()
+    # Always run verify_password, even for a nonexistent user or one with no
+    # password set — a real account's failure and a nonexistent account's
+    # failure must take the same amount of time, or the response latency
+    # itself would leak which emails/handles are registered.
+    stored_hash = user.password_hash if user and user.password_hash else DUMMY_HASH
+    password_ok = verify_password(password, stored_hash)
+    if user is None or not user.password_hash or not password_ok:
+        raise generic_error
+    return user
 
 
 def consume_magic_link_token(session: Session, raw_token: str) -> User:

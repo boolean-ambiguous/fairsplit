@@ -8,7 +8,9 @@ history on every expense.
 ## Features
 
 - **Accounts**: sign up with email, confirm via a magic link, then pick the
-  name your groups will see you by.
+  name your groups will see you by. Once verified, optionally set a password
+  in account settings to log back in with email/username + password instead
+  of waiting on another magic-link email.
 - **Dashboard**: a chart of what's owed to you vs. what you owe over time,
   your open positions with each person, and the groups you're in.
 - **Groups**: a name, a default currency, an optional photo, and people

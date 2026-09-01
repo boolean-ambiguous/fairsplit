@@ -8,7 +8,7 @@ from sqlmodel.pool import StaticPool
 import app.database as database
 from app.main import app
 from app.models import MagicLinkToken
-from app.services.rate_limit import signup_ip_limiter
+from app.services.rate_limit import login_ip_limiter, signup_ip_limiter
 
 
 @pytest.fixture(autouse=True)
@@ -32,6 +32,7 @@ def _reset_signup_ip_limiter():
     # report the same client host), so it must be reset per test to avoid
     # unrelated tests tripping each other's limit.
     signup_ip_limiter._hits.clear()
+    login_ip_limiter._hits.clear()
 
 
 @pytest.fixture

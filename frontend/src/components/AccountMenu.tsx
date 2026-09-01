@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Avatar,
   Box,
+  Button,
   Divider,
   IconButton,
   InputAdornment,
@@ -23,6 +24,9 @@ export default function AccountMenu() {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [handle, setHandle] = useState(user?.handle ?? '')
   const [handleError, setHandleError] = useState<string | null>(null)
+  const [password, setPassword] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordSaved, setPasswordSaved] = useState(false)
 
   if (!user) return null
 
@@ -41,6 +45,23 @@ export default function AccountMenu() {
     } catch (err) {
       if (err instanceof ApiError) setHandleError(err.message)
       setHandle(user.handle ?? '')
+    }
+  }
+
+  const savePassword = async () => {
+    setPasswordError(null)
+    setPasswordSaved(false)
+    if (password.length < 8) {
+      setPasswordError('Password must be at least 8 characters')
+      return
+    }
+    try {
+      const updated = await api.setPassword(password)
+      setUser(updated)
+      setPassword('')
+      setPasswordSaved(true)
+    } catch (err) {
+      if (err instanceof ApiError) setPasswordError(err.message)
     }
   }
 
@@ -101,6 +122,37 @@ export default function AccountMenu() {
               <ToggleButton value="light">Light</ToggleButton>
               <ToggleButton value="dark">Dark</ToggleButton>
             </ToggleButtonGroup>
+          </Box>
+          <Box sx={{ mt: 1.5 }}>
+            <Typography variant="body2" sx={{ mb: 0.75 }}>
+              {user.has_password ? 'Change password' : 'Set a password'}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <TextField
+                size="small"
+                fullWidth
+                type="password"
+                placeholder="New password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  setPasswordSaved(false)
+                }}
+              />
+              <Button size="small" variant="outlined" onClick={savePassword} disabled={!password}>
+                Save
+              </Button>
+            </Box>
+            {passwordError && (
+              <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                {passwordError}
+              </Typography>
+            )}
+            {passwordSaved && !passwordError && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                Password saved. You can now log in with it too.
+              </Typography>
+            )}
           </Box>
         </Box>
         <Divider />
