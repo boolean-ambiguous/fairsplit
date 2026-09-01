@@ -16,6 +16,9 @@ AMOUNT_MAX_LEN = 20  # e.g. "-9999999999999999.99"
 HANDLE_MAX_LEN = 20
 HANDLE_MIN_LEN = 3
 THEMES = ("system", "light", "dark")
+PASSWORD_MIN_LEN = 8
+PASSWORD_MAX_LEN = 200
+IDENTIFIER_MAX_LEN = max(EMAIL_MAX_LEN, HANDLE_MAX_LEN)
 
 
 # ---- Auth ----
@@ -27,6 +30,7 @@ class UserOut(BaseModel):
     name: str | None
     handle: str | None
     theme: str
+    has_password: bool
 
 
 class SignupRequest(BaseModel):
@@ -35,6 +39,15 @@ class SignupRequest(BaseModel):
 
 class VerifyRequest(BaseModel):
     token: str = Field(max_length=TOKEN_MAX_LEN)
+
+
+class LoginRequest(BaseModel):
+    identifier: str = Field(max_length=IDENTIFIER_MAX_LEN)
+    password: str = Field(max_length=PASSWORD_MAX_LEN)
+
+
+class SetPasswordRequest(BaseModel):
+    password: str = Field(min_length=PASSWORD_MIN_LEN, max_length=PASSWORD_MAX_LEN)
 
 
 class NameRequest(BaseModel):

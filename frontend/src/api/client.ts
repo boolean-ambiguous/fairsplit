@@ -48,6 +48,10 @@ export const api = {
     }),
   verify: (token: string) =>
     request<User>('/auth/verify', { method: 'POST', body: JSON.stringify({ token }) }),
+  login: (identifier: string, password: string) =>
+    request<User>('/auth/login', { method: 'POST', body: JSON.stringify({ identifier, password }) }),
+  setPassword: (password: string) =>
+    request<User>('/auth/password', { method: 'POST', body: JSON.stringify({ password }) }),
   setName: (name: string) =>
     request<User>('/auth/name', { method: 'POST', body: JSON.stringify({ name }) }),
   setHandle: (handle: string) =>

@@ -247,6 +247,89 @@ def test_invited_by_email_links_to_account_immediately(client, engine, signed_in
     assert any(g["id"] == group_id for g in groups)
 
 
+def test_signup_returns_502_when_email_delivery_fails(client, monkeypatch):
+    def boom(email, link):
+        raise ConnectionRefusedError("no mail server here")
+
+    monkeypatch.setattr("app.routes.auth.send_magic_link", boom)
+    resp = client.post("/api/auth/signup", json={"email": "ana@example.com"})
+    assert resp.status_code == 502
+
+
+def test_set_password_and_login_with_email(client, signed_in):
+    signed_in("Ana", email="ana@example.com")
+    resp = client.post("/api/auth/password", json={"password": "correct-horse"})
+    assert resp.status_code == 200
+    assert resp.json()["has_password"] is True
+
+    client.post("/api/auth/logout")
+    resp = client.post(
+        "/api/auth/login", json={"identifier": "ana@example.com", "password": "correct-horse"}
+    )
+    assert resp.status_code == 200
+    assert client.get("/api/auth/me").status_code == 200
+
+
+def test_login_with_handle(client, signed_in):
+    signed_in("Ana", email="ana@example.com")
+    client.post("/api/auth/handle", json={"handle": "ana"})
+    client.post("/api/auth/password", json={"password": "correct-horse"})
+    client.post("/api/auth/logout")
+
+    resp = client.post("/api/auth/login", json={"identifier": "ana", "password": "correct-horse"})
+    assert resp.status_code == 200
+
+
+def test_login_rejects_wrong_password(client, signed_in):
+    signed_in("Ana", email="ana@example.com")
+    client.post("/api/auth/password", json={"password": "correct-horse"})
+    client.post("/api/auth/logout")
+
+    resp = client.post(
+        "/api/auth/login", json={"identifier": "ana@example.com", "password": "wrong"}
+    )
+    assert resp.status_code == 401
+
+
+def test_login_rejects_unknown_identifier(client):
+    resp = client.post(
+        "/api/auth/login", json={"identifier": "nobody@example.com", "password": "whatever"}
+    )
+    assert resp.status_code == 401
+
+
+def test_login_rejects_account_with_no_password_set(client, signed_in):
+    signed_in("Ana", email="ana@example.com")
+    client.post("/api/auth/logout")
+    resp = client.post(
+        "/api/auth/login", json={"identifier": "ana@example.com", "password": "anything"}
+    )
+    assert resp.status_code == 401
+
+
+def test_set_password_requires_session(client):
+    resp = client.post("/api/auth/password", json={"password": "correct-horse"})
+    assert resp.status_code == 401
+
+
+def test_set_password_rejects_short_password(client, signed_in):
+    signed_in("Ana")
+    resp = client.post("/api/auth/password", json={"password": "short"})
+    assert resp.status_code == 422
+
+
+def test_repeated_login_from_same_ip_is_rate_limited(client):
+    for _ in range(10):
+        resp = client.post(
+            "/api/auth/login", json={"identifier": "nobody@example.com", "password": "x"}
+        )
+        assert resp.status_code == 401
+    resp = client.post(
+        "/api/auth/login", json={"identifier": "nobody@example.com", "password": "x"}
+    )
+    assert resp.status_code == 429
+
+
 def test_placeholder_without_email_links_on_verify(client, engine, signed_in):
     # A member added by name only (no email) stays a bare placeholder — the
     # passive _link_invited_memberships path only fires for members that
